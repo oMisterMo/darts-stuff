@@ -15,7 +15,6 @@ const SEGMENT_ANGLE = (Math.PI * 2) / SEGMENT_NUMBERS.length;
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-const scoreReadout = document.getElementById('score-readout');
 
 // Canvas size in CSS pixels, set by resizeCanvas.
 let canvasWidth = 0;
@@ -172,21 +171,11 @@ function scoreAt(x, y) {
     return { label: `${number}`, score: number };
 }
 
-canvas.addEventListener('mousemove', event => {
-    const { label, score } = scoreAt(event.offsetX, event.offsetY);
-    scoreReadout.textContent = `${label} (${score})`;
-});
-
-canvas.addEventListener('mouseleave', () => {
-    scoreReadout.textContent = '';
-});
-
 // Three darts can score at most 180 in a visit.
 const MAX_VISIT_SCORE = 180;
 const MAX_PAD_DIGITS = 3;
 
 const padDisplay = document.getElementById('pad-display');
-const lastScore = document.getElementById('last-score');
 let padEntry = '';
 
 function showPadEntry() {
@@ -206,10 +195,9 @@ function pressDelete() {
     showPadEntry();
 }
 
-// Nothing uses the score yet, it is only shown below the pad.
+// Nothing uses the score yet, entering it just clears the pad.
 function pressEnter() {
     if (padEntry === '' || Number(padEntry) > MAX_VISIT_SCORE) return;
-    lastScore.textContent = `Scored ${Number(padEntry)}`;
     padEntry = '';
     showPadEntry();
 }
