@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Darts</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            font-family: sans-serif;
+        }
+
+        #score-readout {
+            margin-top: 10px;
+            text-align: center;
+            font-size: 20px;
+            min-height: 1.5em;
+        }
+
+        /* #controls {
+            margin-top: 20px;
+            text-align: center;
+
+            button {
+                margin: 0 5px;
+                padding: 10px 15px;
+                font-size: 16px;
+                border: none;
+                border-radius: 5px;
+                background-color: #4CAF50;
+                color: white;
+                cursor: pointer;
+            }
+
+            button:hover {
+                background-color: #45a049;
+            }
+        } */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <canvas id="canvas" width="800" height="600"></canvas>
+
+        <div id="score-readout"></div>
+
+        <!-- <div id="controls">
+            <button id="play">Play</button>
+            <button id="reset">Reset</button>
+        </div> -->
+    </div>
+
+    <script>
+        const WIDTH = 800;
+        const HEIGHT = 600;
+
+        const BACKGROUND_COLOR = '#2B2B2B';
+        const BLACK = '#1A1A1A';
+        const CREAM = '#F3E9D2';
+        const RED = '#C8102E';
+        const GREEN = '#00873E';
+        const WIRE_COLOR = '#C0C0C0';
+        const NUMBER_COLOR = '#FFFFFF';
+
+        // Clockwise from the top.
+        const SEGMENT_NUMBERS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
+        const SEGMENT_ANGLE = (Math.PI * 2) / SEGMENT_NUMBERS.length;
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const scoreReadout = document.getElementById('score-readout');
+
+        function resizeCanvas() {
+            canvas.width = WIDTH;
+            canvas.height = HEIGHT;
+        }
+
+        // Radii are in millimetres, measured from the centre to the outside of each
+        // ring's wire, following the standard tournament board. `scale` converts them
+        // to pixels, so hit detection and drawing share the same numbers.
+        const dartboard = {
+            x: WIDTH / 2,
+            y: HEIGHT / 2,
+            scale: 1.2,
+            innerBull: 6.35,
+            outerBull: 15.9,
+            trebleInner: 99,
+            trebleOuter: 107,
+            doubleInner: 162,
+            doubleOuter: 170,
+            // Outer edge of the black number ring
+            boardEdge: 225
+        };
+
+        function px(mm) {
+            return mm * dartboard.scale;
+        }
+
+        // Segment i is centred on angle -90° + i * 18°. Canvas angles run clockwise
+        // because y points down, which matches the order of SEGMENT_NUMBERS.
+        function segmentStartAngle(index) {
+            return -Math.PI / 2 + (index - 0.5) * SEGMENT_ANGLE;
+        }
+
+        // 20 and every second segment after it have black singles with red rings.
+        function segmentColors(index) {
+            return index % 2 === 0 ? { single: BLACK, ring: RED } : { single: CREAM, ring: GREEN };
+        }
+
+        function drawRingSector(innerRadius, outerRadius, startAngle, endAngle, color) {
+            const { x, y } = dartboard;
+
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, px(outerRadius), startAngle, endAngle);
+            ctx.arc(x, y, px(innerRadius), endAngle, startAngle, true);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawBoardEdge() {
+            ctx.fillStyle = BLACK;
+            ctx.beginPath();
+            ctx.arc(dartboard.x, dartboard.y, px(dartboard.boardEdge), 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawSegments() {
+            const { outerBull, trebleInner, trebleOuter, doubleInner, doubleOuter } = dartboard;
+
+            SEGMENT_NUMBERS.forEach((_, index) => {
+                const start = segmentStartAngle(index);
+                const end = start + SEGMENT_ANGLE;
+                const colors = segmentColors(index);
+
+                drawRingSector(outerBull, trebleInner, start, end, colors.single);
+                drawRingSector(trebleInner, trebleOuter, start, end, colors.ring);
+                drawRingSector(trebleOuter, doubleInner, start, end, colors.single);
+                drawRingSector(doubleInner, doubleOuter, start, end, colors.ring);
+            });
+        }
+
+        function drawBulls() {
+            const { x, y, innerBull, outerBull } = dartboard;
+
+            ctx.fillStyle = GREEN;
+            ctx.beginPath();
+            ctx.arc(x, y, px(outerBull), 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = RED;
+            ctx.beginPath();
+            ctx.arc(x, y, px(innerBull), 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // The spider: ring wires plus radial wires from the outer bull to the double ring.
+        function drawWires() {
+            const { x, y, innerBull, outerBull, trebleInner, trebleOuter, doubleInner, doubleOuter } = dartboard;
+
+            ctx.strokeStyle = WIRE_COLOR;
+            ctx.lineWidth = 1;
+
+            [innerBull, outerBull, trebleInner, trebleOuter, doubleInner, doubleOuter].forEach(radius => {
+                ctx.beginPath();
+                ctx.arc(x, y, px(radius), 0, Math.PI * 2);
+                ctx.stroke();
+            });
+
+            SEGMENT_NUMBERS.forEach((_, index) => {
+                const angle = segmentStartAngle(index);
+                ctx.beginPath();
+                ctx.moveTo(x + Math.cos(angle) * px(outerBull), y + Math.sin(angle) * px(outerBull));
+                ctx.lineTo(x + Math.cos(angle) * px(doubleOuter), y + Math.sin(angle) * px(doubleOuter));
+                ctx.stroke();
+            });
+        }
+
+        // Numbers sit upright, centred between the double ring and the board edge.
+        function drawNumbers() {
+            const { x, y, doubleOuter, boardEdge } = dartboard;
+            const radius = px((doubleOuter + boardEdge) / 2);
+
+            ctx.fillStyle = NUMBER_COLOR;
+            ctx.font = `bold ${Math.round(px(28))}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            SEGMENT_NUMBERS.forEach((number, index) => {
+                const angle = -Math.PI / 2 + index * SEGMENT_ANGLE;
+                ctx.fillText(number, x + Math.cos(angle) * radius, y + Math.sin(angle) * radius);
+            });
+        }
+
+        function drawDartboard() {
+            ctx.fillStyle = BACKGROUND_COLOR;
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+            drawBoardEdge();
+            drawSegments();
+            drawBulls();
+            drawWires();
+            drawNumbers();
+        }
+
+        // Returns what a dart landing at canvas point (x, y) scores, e.g.
+        // { label: 'T20', score: 60 }, or a miss outside the double ring.
+        function scoreAt(x, y) {
+            const { innerBull, outerBull, trebleInner, trebleOuter, doubleInner, doubleOuter } = dartboard;
+            const dx = x - dartboard.x;
+            const dy = y - dartboard.y;
+            const distance = Math.hypot(dx, dy) / dartboard.scale;
+
+            if (distance <= innerBull) return { label: 'Bull', score: 50 };
+            if (distance <= outerBull) return { label: '25', score: 25 };
+            if (distance > doubleOuter) return { label: 'Miss', score: 0 };
+
+            // Angle clockwise from the top, shifted half a segment so 20 starts at 0.
+            const fromTop = Math.atan2(dx, -dy) + SEGMENT_ANGLE / 2;
+            const turn = Math.PI * 2;
+            const index = Math.floor((((fromTop % turn) + turn) % turn) / SEGMENT_ANGLE);
+            const number = SEGMENT_NUMBERS[index];
+
+            if (distance >= trebleInner && distance <= trebleOuter) return { label: `T${number}`, score: number * 3 };
+            if (distance >= doubleInner) return { label: `D${number}`, score: number * 2 };
+            return { label: `${number}`, score: number };
+        }
+
+        canvas.addEventListener('mousemove', event => {
+            const { label, score } = scoreAt(event.offsetX, event.offsetY);
+            scoreReadout.textContent = `${label} (${score})`;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            scoreReadout.textContent = '';
+        });
+
+        resizeCanvas();
+        drawDartboard();
+    </script>
+</body>
+</html>
