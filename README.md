@@ -20,7 +20,13 @@ Open `index.html` in a browser. The page uses nested CSS, so it needs a recent b
 
 ## Project layout
 
-All the code is in `index.html`: the page markup, styles and script.
+| File | Contains |
+| --- | --- |
+| `index.html` | Page markup |
+| `styles.css` | Styles |
+| `script.js` | Drawing, scoring and the number pad |
+
+The drawing functions in `script.js` are:
 
 | Function | Draws |
 | --- | --- |

@@ -8,7 +8,7 @@ There is no build, lint or test tooling, and no dependencies. To run the app, op
 
 ## Architecture
 
-Everything is in `index.html`: markup, styles and one inline script that draws the board once on load. There is no animation loop yet, and there are no game rules. The number pad below the board only shows the entered score.
+The markup is in `index.html`, the styles in `styles.css`, and all the JavaScript in `script.js`, a plain script (not a module) loaded at the end of `<body>`. It draws the board on load and redraws it whenever the canvas changes size. There is no animation loop yet, and there are no game rules. The number pad below the board only shows the entered score.
 
 - **Units:** all radii in `dartboard` are millimetres from the board centre. Convert with `px(mm)` when drawing. `scoreAt` divides by `dartboard.scale` instead, so drawing and hit detection always agree.
 - **Segments:** `SEGMENT_NUMBERS` lists the numbers clockwise from the top. Segment `i` is centred on `-90° + i * 18°` in canvas angles (clockwise, since y points down). Even indexes have black singles with red rings, odd ones cream singles with green rings.
