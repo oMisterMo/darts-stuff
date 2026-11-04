@@ -25,6 +25,8 @@ Open `index.html` in a browser. The page uses nested CSS, so it needs a recent b
 | `index.html` | Page markup |
 | `styles.css` | Styles |
 | `script.js` | Drawing, scoring and the number pad |
+| `favicon.svg` | Browser tab icon |
+| `apple-touch-icon.png` | 180×180 home screen icon for iPhone and iPad |
 
 The drawing functions in `script.js` are:
 
