@@ -139,8 +139,8 @@ function drawNumbers() {
 }
 
 function drawDartboard() {
-    ctx.fillStyle = BACKGROUND_COLOR;
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    // ctx.fillStyle = BACKGROUND_COLOR;
+    // ctx.fillRect(0, 0, canvasWidth, canvasHeight);
     drawBoardEdge();
     drawSegments();
     drawBulls();
