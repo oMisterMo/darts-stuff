@@ -11,8 +11,8 @@ Early work in progress. So far the board is drawn:
 - Outer bull (25) and inner bull (50)
 - Silver wires (the spider) around the rings and between segments
 - Hovering over the board shows what a dart there would score, such as `T20 (60)`
-
-The **Play** and **Reset** buttons are on the page but don't do anything yet.
+- A large number pad below the board for entering a visit score (0–180). The keyboard's digits, Backspace and Enter work too. Entered scores are only shown for now
+- The board and pad scale down to fit phone screens
 
 ## Running
 

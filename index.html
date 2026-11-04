@@ -12,7 +12,112 @@
             font-family: sans-serif;
         }
 
+        /* The page fills the screen height. The number pad, readouts and margins
+           take what they need and the board gets whatever height is left. */
+        .container {
+            width: 100%;
+            max-width: 800px;
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+
+            > * {
+                flex: none;
+            }
+        }
+
+        #board {
+            flex: 1 1 0;
+            /* Below this the page scrolls rather than the board vanishing */
+            min-height: 200px;
+            position: relative;
+        }
+
+        /* The canvas keeps its 800×600 drawing size and CSS scales it down,
+           keeping its shape, to fit inside #board. scoreAt is given canvas
+           coordinates, see canvasPoint. */
+        canvas {
+            display: block;
+            position: absolute;
+            inset: 0;
+            margin: auto;
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
         #score-readout {
+            margin-top: 10px;
+            text-align: center;
+            font-size: 20px;
+            min-height: 1.5em;
+        }
+
+        #number-pad {
+            width: 100%;
+            max-width: 480px;
+            margin: 10px auto 20px;
+            padding: 0 10px;
+            box-sizing: border-box;
+        }
+
+        #pad-display {
+            height: clamp(56px, 10vw, 72px);
+            margin-bottom: 10px;
+            padding: 0 16px;
+            border-radius: 8px;
+            background-color: #1A1A1A;
+            color: white;
+            font-size: clamp(32px, 8vw, 48px);
+            font-weight: bold;
+            line-height: clamp(56px, 10vw, 72px);
+            text-align: right;
+        }
+
+        #pad-display.invalid {
+            color: #FF6B6B;
+        }
+
+        #pad-keys {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+
+            button {
+                height: clamp(52px, 9vh, 88px);
+                border: none;
+                border-radius: 8px;
+                background-color: #E8E8E8;
+                color: #1A1A1A;
+                font-size: clamp(28px, 7vw, 40px);
+                font-weight: bold;
+                cursor: pointer;
+                /* Stops double-tap zoom on mobile when entering repeated digits */
+                touch-action: manipulation;
+                user-select: none;
+            }
+
+            button:hover {
+                background-color: #D6D6D6;
+            }
+
+            button:active {
+                background-color: #C4C4C4;
+            }
+
+            #pad-enter {
+                background-color: #4CAF50;
+                color: white;
+            }
+
+            #pad-enter:hover {
+                background-color: #45a049;
+            }
+        }
+
+        #last-score {
             margin-top: 10px;
             text-align: center;
             font-size: 20px;
@@ -42,9 +147,30 @@
 </head>
 <body>
     <div class="container">
-        <canvas id="canvas" width="800" height="600"></canvas>
+        <div id="board">
+            <canvas id="canvas" width="800" height="600"></canvas>
+        </div>
 
         <div id="score-readout"></div>
+
+        <div id="number-pad">
+            <div id="pad-display" aria-live="polite"></div>
+            <div id="pad-keys">
+                <button data-digit="1">1</button>
+                <button data-digit="2">2</button>
+                <button data-digit="3">3</button>
+                <button data-digit="4">4</button>
+                <button data-digit="5">5</button>
+                <button data-digit="6">6</button>
+                <button data-digit="7">7</button>
+                <button data-digit="8">8</button>
+                <button data-digit="9">9</button>
+                <button id="pad-delete" aria-label="Delete">⌫</button>
+                <button data-digit="0">0</button>
+                <button id="pad-enter">Enter</button>
+            </div>
+            <div id="last-score"></div>
+        </div>
 
         <!-- <div id="controls">
             <button id="play">Play</button>
@@ -227,13 +353,71 @@
             return { label: `${number}`, score: number };
         }
 
+        // Mouse offsets are in CSS pixels, which differ from canvas pixels once
+        // the canvas is scaled to fit a small screen.
+        function canvasPoint(event) {
+            return {
+                x: (event.offsetX * canvas.width) / canvas.clientWidth,
+                y: (event.offsetY * canvas.height) / canvas.clientHeight
+            };
+        }
+
         canvas.addEventListener('mousemove', event => {
-            const { label, score } = scoreAt(event.offsetX, event.offsetY);
+            const { x, y } = canvasPoint(event);
+            const { label, score } = scoreAt(x, y);
             scoreReadout.textContent = `${label} (${score})`;
         });
 
         canvas.addEventListener('mouseleave', () => {
             scoreReadout.textContent = '';
+        });
+
+        // Three darts can score at most 180 in a visit.
+        const MAX_VISIT_SCORE = 180;
+        const MAX_PAD_DIGITS = 3;
+
+        const padDisplay = document.getElementById('pad-display');
+        const lastScore = document.getElementById('last-score');
+        let padEntry = '';
+
+        function showPadEntry() {
+            padDisplay.textContent = padEntry;
+            padDisplay.classList.toggle('invalid', Number(padEntry) > MAX_VISIT_SCORE);
+        }
+
+        function pressDigit(digit) {
+            if (padEntry.length >= MAX_PAD_DIGITS) return;
+            // Avoids entries like "07"
+            padEntry = padEntry === '0' ? digit : padEntry + digit;
+            showPadEntry();
+        }
+
+        function pressDelete() {
+            padEntry = padEntry.slice(0, -1);
+            showPadEntry();
+        }
+
+        // Nothing uses the score yet, it is only shown below the pad.
+        function pressEnter() {
+            if (padEntry === '' || Number(padEntry) > MAX_VISIT_SCORE) return;
+            lastScore.textContent = `Scored ${Number(padEntry)}`;
+            padEntry = '';
+            showPadEntry();
+        }
+
+        document.querySelectorAll('#pad-keys [data-digit]').forEach(button => {
+            button.addEventListener('click', () => pressDigit(button.dataset.digit));
+        });
+        document.getElementById('pad-delete').addEventListener('click', pressDelete);
+        document.getElementById('pad-enter').addEventListener('click', pressEnter);
+
+        document.addEventListener('keydown', event => {
+            if (event.ctrlKey || event.metaKey || event.altKey) return;
+            if (/^[0-9]$/.test(event.key)) pressDigit(event.key);
+            else if (event.key === 'Backspace') pressDelete();
+            else if (event.key === 'Enter') pressEnter();
+            else return;
+            event.preventDefault();
         });
 
         resizeCanvas();
