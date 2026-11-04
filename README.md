@@ -34,4 +34,4 @@ All the code is in `index.html`: the page markup, styles and script.
 
 ## Configuration
 
-Board sizes are in the `dartboard` object, in millimetres from the centre, following the standard tournament board (double ring outer edge at 170 mm). `dartboard.scale` converts millimetres to pixels, and the board is centred on the 800×600 canvas.
+Board sizes are in the `dartboard` object, in millimetres from the centre, following the standard tournament board (double ring outer edge at 170 mm). `dartboard.scale` converts millimetres to pixels. It is recalculated whenever the canvas changes size, so the board always fits the space above the number pad.

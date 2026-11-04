@@ -34,18 +34,13 @@
             position: relative;
         }
 
-        /* The canvas keeps its 800×600 drawing size and CSS scales it down,
-           keeping its shape, to fit inside #board. scoreAt is given canvas
-           coordinates, see canvasPoint. */
+        /* The canvas fills #board and is redrawn at that size, see resizeCanvas. */
         canvas {
             display: block;
             position: absolute;
             inset: 0;
-            margin: auto;
-            width: auto;
-            height: auto;
-            max-width: 100%;
-            max-height: 100%;
+            width: 100%;
+            height: 100%;
         }
 
         #score-readout {
@@ -179,8 +174,8 @@
     </div>
 
     <script>
-        const WIDTH = 800;
-        const HEIGHT = 600;
+        // Fraction of the canvas's shorter side the board's diameter takes up.
+        const BOARD_FILL = 0.96;
 
         const BACKGROUND_COLOR = '#2B2B2B66';
         const BLACK = '#1A1A1A';
@@ -198,18 +193,18 @@
         const ctx = canvas.getContext('2d');
         const scoreReadout = document.getElementById('score-readout');
 
-        function resizeCanvas() {
-            canvas.width = WIDTH;
-            canvas.height = HEIGHT;
-        }
+        // Canvas size in CSS pixels, set by resizeCanvas.
+        let canvasWidth = 0;
+        let canvasHeight = 0;
 
         // Radii are in millimetres, measured from the centre to the outside of each
         // ring's wire, following the standard tournament board. `scale` converts them
         // to pixels, so hit detection and drawing share the same numbers.
         const dartboard = {
-            x: WIDTH / 2,
-            y: HEIGHT / 2,
-            scale: 1.2,
+            // Centre and pixels per millimetre, set by resizeCanvas
+            x: 0,
+            y: 0,
+            scale: 1,
             innerBull: 6.35,
             outerBull: 15.9,
             trebleInner: 99,
@@ -322,7 +317,7 @@
 
         function drawDartboard() {
             ctx.fillStyle = BACKGROUND_COLOR;
-            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
             drawBoardEdge();
             drawSegments();
             drawBulls();
@@ -353,18 +348,8 @@
             return { label: `${number}`, score: number };
         }
 
-        // Mouse offsets are in CSS pixels, which differ from canvas pixels once
-        // the canvas is scaled to fit a small screen.
-        function canvasPoint(event) {
-            return {
-                x: (event.offsetX * canvas.width) / canvas.clientWidth,
-                y: (event.offsetY * canvas.height) / canvas.clientHeight
-            };
-        }
-
         canvas.addEventListener('mousemove', event => {
-            const { x, y } = canvasPoint(event);
-            const { label, score } = scoreAt(x, y);
+            const { label, score } = scoreAt(event.offsetX, event.offsetY);
             scoreReadout.textContent = `${label} (${score})`;
         });
 
@@ -420,8 +405,25 @@
             event.preventDefault();
         });
 
-        resizeCanvas();
-        drawDartboard();
+        // Matches the canvas to the size it is shown at, so it fills the full width
+        // and stays sharp on high-DPI screens. Drawing and scoreAt both work in CSS
+        // pixels, and the transform maps them onto the device pixels.
+        function resizeCanvas() {
+            const ratio = window.devicePixelRatio || 1;
+            canvasWidth = canvas.clientWidth;
+            canvasHeight = canvas.clientHeight;
+            canvas.width = Math.round(canvasWidth * ratio);
+            canvas.height = Math.round(canvasHeight * ratio);
+            ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+            dartboard.x = canvasWidth / 2;
+            dartboard.y = canvasHeight / 2;
+            dartboard.scale = (Math.min(canvasWidth, canvasHeight) * BOARD_FILL) / 2 / dartboard.boardEdge;
+
+            drawDartboard();
+        }
+
+        new ResizeObserver(resizeCanvas).observe(canvas);
     </script>
 </body>
 </html>
