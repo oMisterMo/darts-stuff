@@ -178,6 +178,11 @@ function scoreAt(x, y) {
 // Keeps random darts this far (mm) from a wire, so it is always clear which
 // bed they landed in.
 const WIRE_MARGIN = 1.5;
+// Darts land in this central fraction of a bed's depth and width, so they
+// sit well inside it rather than near the wires.
+const LANDING_SPREAD = 0.5;
+// Radius of the dart marker in mm (it never drops below 5 px)
+const DART_RADIUS = 4;
 const DART_COLOR = '#2E7DFF';
 
 function randomBetween(min, max) {
@@ -202,29 +207,38 @@ function buildTargets({ singles, doubles, triples }) {
     return targets;
 }
 
+// A random radius around the middle of the band from `inner` to `outer`,
+// at least WIRE_MARGIN from either wire.
+function nearMiddle(inner, outer) {
+    const middle = (inner + outer) / 2;
+    const spread = Math.min((outer - inner) / 2 * LANDING_SPREAD, (outer - inner) / 2 - WIRE_MARGIN);
+    return randomBetween(middle - spread, middle + spread);
+}
+
 // A random point inside the target's bed, in mm from the board centre, so
 // the dart stays in place when the board is resized.
 function randomPointIn(target) {
     const { innerBull, outerBull, trebleInner, trebleOuter, doubleInner, doubleOuter } = dartboard;
-    const m = WIRE_MARGIN;
     let radius;
     let angle = randomBetween(0, Math.PI * 2);
 
     if (target.kind === 'bull') {
-        radius = randomBetween(0, innerBull - m);
+        radius = nearMiddle(0, innerBull);
     } else if (target.kind === 'outerBull') {
-        radius = randomBetween(innerBull + m, outerBull - m);
+        radius = nearMiddle(innerBull, outerBull);
     } else {
-        if (target.kind === 'triple') radius = randomBetween(trebleInner + m, trebleOuter - m);
-        else if (target.kind === 'double') radius = randomBetween(doubleInner + m, doubleOuter - m);
+        if (target.kind === 'triple') radius = nearMiddle(trebleInner, trebleOuter);
+        else if (target.kind === 'double') radius = nearMiddle(doubleInner, doubleOuter);
         // Inner or outer single, equally likely
-        else if (Math.random() < 0.5) radius = randomBetween(outerBull + m, trebleInner - m);
-        else radius = randomBetween(trebleOuter + m, doubleInner - m);
+        else if (Math.random() < 0.5) radius = nearMiddle(outerBull, trebleInner);
+        else radius = nearMiddle(trebleOuter, doubleInner);
 
-        // Keep clear of the radial wires: the margin as an angle at this radius
-        const angleMargin = m / radius;
-        const start = segmentStartAngle(target.index);
-        angle = randomBetween(start + angleMargin, start + SEGMENT_ANGLE - angleMargin);
+        // Around the middle of the segment, and never so close to a radial
+        // wire that the marker touches it
+        const middle = segmentStartAngle(target.index) + SEGMENT_ANGLE / 2;
+        const clearance = SEGMENT_ANGLE / 2 - (DART_RADIUS + WIRE_MARGIN) / radius;
+        const spread = Math.max(0, Math.min(SEGMENT_ANGLE / 2 * LANDING_SPREAD, clearance));
+        angle = randomBetween(middle - spread, middle + spread);
     }
 
     return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
@@ -280,7 +294,7 @@ function drawDart(dart, now) {
 
     const x = dartboard.x + px(dart.point.x);
     const y = dartboard.y + px(dart.point.y);
-    const radius = Math.max(5, px(4));
+    const radius = Math.max(5, px(DART_RADIUS));
 
     if (t < 1) {
         const e = easeOutCubic(t);

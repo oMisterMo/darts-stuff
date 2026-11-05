@@ -44,4 +44,4 @@ The drawing functions in `script.js` are:
 
 Board sizes are in the `dartboard` object, in millimetres from the centre, following the standard tournament board (double ring outer edge at 170 mm). `dartboard.scale` converts millimetres to pixels. It is recalculated whenever the canvas changes size, so the board always fits the space above the number pad.
 
-`WIRE_MARGIN` keeps random darts clear of the wires and `DART_SPACING` keeps darts in a turn apart. `THROW_DURATION`, `THROW_PAUSE` and `IMPACT_DURATION` time the throw animation. `RIGHT_DELAY`, `WRONG_DELAY` and `WRONG_DELAY_PER_DART` set how long an answer is shown before the next turn.
+`LANDING_SPREAD` sets how close to the middle of a bed darts land, `WIRE_MARGIN` keeps them clear of the wires and `DART_SPACING` keeps darts in a turn apart. `THROW_DURATION`, `THROW_PAUSE` and `IMPACT_DURATION` time the throw animation. `RIGHT_DELAY`, `WRONG_DELAY` and `WRONG_DELAY_PER_DART` set how long an answer is shown before the next turn.
