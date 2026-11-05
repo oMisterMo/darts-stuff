@@ -418,6 +418,46 @@ function readOptions() {
     };
 }
 
+// The options last used for each mode are kept in localStorage, under
+// `darts-options-1`, `darts-options-2` and `darts-options-3`. The form's
+// initial state in index.html is the default for a mode with none saved.
+const defaultOptions = readOptions();
+
+function storageKey(darts) {
+    return `darts-options-${darts}`;
+}
+
+function loadOptions(darts) {
+    try {
+        const saved = JSON.parse(localStorage.getItem(storageKey(darts)));
+        if (saved && typeof saved === 'object') return { ...defaultOptions, ...saved };
+    } catch {
+        // Storage blocked or the saved value is broken, use the defaults
+    }
+    return defaultOptions;
+}
+
+function saveOptions({ darts, singles, doubles, triples, count }) {
+    try {
+        localStorage.setItem(storageKey(darts), JSON.stringify({ singles, doubles, triples, count }));
+    } catch {
+        // Storage blocked or full, the options just won't be remembered
+    }
+}
+
+// Sets the form to `options`. A count with no matching radio button falls
+// back to the default.
+function showOptions(options) {
+    const { elements } = optionsForm;
+    elements.singles.checked = Boolean(options.singles);
+    elements.doubles.checked = Boolean(options.doubles);
+    elements.triples.checked = Boolean(options.triples);
+    const counts = [...elements.count];
+    const radio = counts.find(r => Number(r.value) === options.count)
+        ?? counts.find(r => Number(r.value) === defaultOptions.count);
+    radio.checked = true;
+}
+
 // With one dart a turn the count is darts, otherwise it is turns.
 function turnName(darts) {
     return darts === 1 ? 'Dart' : 'Turn';
@@ -428,6 +468,7 @@ document.querySelectorAll('#modes [data-darts]').forEach(button => {
         chosenDarts = Number(button.dataset.darts);
         optionsTitle.textContent = button.textContent;
         countLegend.textContent = `${turnName(chosenDarts)}s`;
+        showOptions(loadOptions(chosenDarts));
         optionsError.hidden = true;
         optionsDialog.showModal();
     });
@@ -441,6 +482,7 @@ optionsForm.addEventListener('submit', event => {
         optionsError.hidden = false;
         return;
     }
+    saveOptions(options);
     startGame(options);
 });
 
