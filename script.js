@@ -341,6 +341,12 @@ const MAX_VISIT_SCORE = 180;
 const MAX_PAD_DIGITS = 3;
 
 const padDisplay = document.getElementById('pad-display');
+const padKeys = document.getElementById('pad-keys');
+
+// Greys out the keys while darts are being thrown
+function setPadEnabled(enabled) {
+    padKeys.classList.toggle('disabled', !enabled);
+}
 let padEntry = '';
 
 function showPadEntry() {
@@ -546,6 +552,7 @@ function throwTurn() {
     }
     game.turn++;
     game.waiting = false;
+    setPadEnabled(false);
     padEntry = '';
     showPadEntry();
     progressText.textContent = `${turnName(game.perTurn)} ${game.turn} / ${game.count}`;
@@ -560,7 +567,10 @@ function animateTurn(now) {
     drawDartboard();
 
     const last = game.darts[game.darts.length - 1];
-    if (now >= landsAt(last)) game.waiting = true;
+    if (!game.waiting && now >= landsAt(last)) {
+        game.waiting = true;
+        setPadEnabled(true);
+    }
     if (now < settlesAt(last)) animationFrame = requestAnimationFrame(animateTurn);
 }
 

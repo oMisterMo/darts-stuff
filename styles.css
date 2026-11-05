@@ -271,4 +271,11 @@ canvas {
     #pad-enter:hover {
         background-color: #45a049;
     }
+
+    /* While darts are being thrown */
+    &.disabled button {
+        opacity: 0.4;
+        cursor: default;
+        pointer-events: none;
+    }
 }
