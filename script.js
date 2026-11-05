@@ -139,8 +139,8 @@ function drawNumbers() {
 }
 
 function drawDartboard() {
-    // ctx.fillStyle = BACKGROUND_COLOR;
-    // ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    // Clear the last frame, or a flying dart leaves a trail outside the board
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
     drawBoardEdge();
     drawSegments();
     drawBulls();
@@ -259,19 +259,22 @@ function randomPointAwayFrom(target, darts) {
 
 // Throw animation timings in ms. Each dart flies for THROW_DURATION, then
 // the next is thrown after THROW_PAUSE. The impact ring shows on landing.
-const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const THROW_DURATION = REDUCED_MOTION ? 1 : 680;
+// With the animation turned off darts appear instantly, still THROW_PAUSE apart.
+const THROW_DURATION = 680;
 const THROW_PAUSE = 1550;
-const IMPACT_DURATION = REDUCED_MOTION ? 1 : 250;
+const IMPACT_DURATION = 250;
 
 function easeOutCubic(t) {
     return 1 - (1 - t) ** 3;
 }
 
-// How far through its flight a dart is at `now`: below 0 it hasn't been
-// thrown, 0–1 it is flying, and above 1 it has landed.
-function throwProgress(dart, now) {
-    return (now - dart.thrownAt) / THROW_DURATION;
+// When a dart lands, and when its impact ring has faded
+function landsAt(dart) {
+    return dart.thrownAt + dart.flight;
+}
+
+function settlesAt(dart) {
+    return landsAt(dart) + (dart.flight ? IMPACT_DURATION : 0);
 }
 
 function drawMarker(x, y, radius, alpha) {
@@ -287,25 +290,28 @@ function drawMarker(x, y, radius, alpha) {
 }
 
 // A dart flies up from below the board in an arc, shrinking as it moves
-// away from the player, while its shadow closes in on the landing spot.
+// away from the player, while its shadow (if on) closes in on the landing
+// spot. Darts with no flight time just appear.
 function drawDart(dart, now) {
-    const t = throwProgress(dart, now);
-    if (t < 0) return;
+    if (now < dart.thrownAt) return;
 
     const x = dartboard.x + px(dart.point.x);
     const y = dartboard.y + px(dart.point.y);
     const radius = Math.max(5, px(DART_RADIUS));
 
-    if (t < 1) {
+    if (now < landsAt(dart)) {
+        const t = (now - dart.thrownAt) / dart.flight;
         const e = easeOutCubic(t);
         const startX = dartboard.x;
         const startY = canvasHeight + radius * 3;
         const lift = Math.sin(Math.PI * t) * canvasHeight * 0.15;
 
-        ctx.fillStyle = `rgba(0, 0, 0, ${0.35 * e})`;
-        ctx.beginPath();
-        ctx.arc(x, y, radius * (1 + (1 - e)), 0, Math.PI * 2);
-        ctx.fill();
+        if (dart.shadow) {
+            ctx.fillStyle = `rgba(0, 0, 0, ${0.35 * e})`;
+            ctx.beginPath();
+            ctx.arc(x, y, radius * (1 + (1 - e)), 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         drawMarker(
             startX + (x - startX) * e,
@@ -318,8 +324,8 @@ function drawDart(dart, now) {
 
     drawMarker(x, y, radius, 1);
 
-    const impact = (t - 1) * THROW_DURATION / IMPACT_DURATION;
-    if (impact < 1) {
+    const impact = (now - landsAt(dart)) / IMPACT_DURATION;
+    if (dart.flight && impact < 1) {
         ctx.strokeStyle = `rgba(255, 255, 255, ${1 - impact})`;
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -407,15 +413,31 @@ function showScreen(screen) {
     [homeScreen, gameScreen, resultsScreen].forEach(s => { s.hidden = s !== screen; });
 }
 
+// Reads the checkboxes directly rather than with FormData, which skips
+// disabled ones like Shadows when the animation is off.
 function readOptions() {
-    const data = new FormData(optionsForm);
+    const { elements } = optionsForm;
     return {
         darts: chosenDarts,
-        singles: data.has('singles'),
-        doubles: data.has('doubles'),
-        triples: data.has('triples'),
-        count: Number(data.get('count'))
+        singles: elements.singles.checked,
+        doubles: elements.doubles.checked,
+        triples: elements.triples.checked,
+        count: Number([...elements.count].find(radio => radio.checked).value),
+        animation: elements.animation.checked,
+        shadows: elements.shadows.checked
     };
+}
+
+// Shadows only show during the throw animation
+function updateShadowsToggle() {
+    optionsForm.elements.shadows.disabled = !optionsForm.elements.animation.checked;
+}
+optionsForm.elements.animation.addEventListener('change', updateShadowsToggle);
+
+// Animation is off by default for players who ask for reduced motion
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    optionsForm.elements.animation.checked = false;
+    updateShadowsToggle();
 }
 
 // The options last used for each mode are kept in localStorage, under
@@ -437,9 +459,9 @@ function loadOptions(darts) {
     return defaultOptions;
 }
 
-function saveOptions({ darts, singles, doubles, triples, count }) {
+function saveOptions({ darts, singles, doubles, triples, count, animation, shadows }) {
     try {
-        localStorage.setItem(storageKey(darts), JSON.stringify({ singles, doubles, triples, count }));
+        localStorage.setItem(storageKey(darts), JSON.stringify({ singles, doubles, triples, count, animation, shadows }));
     } catch {
         // Storage blocked or full, the options just won't be remembered
     }
@@ -452,6 +474,9 @@ function showOptions(options) {
     elements.singles.checked = Boolean(options.singles);
     elements.doubles.checked = Boolean(options.doubles);
     elements.triples.checked = Boolean(options.triples);
+    elements.animation.checked = Boolean(options.animation);
+    elements.shadows.checked = Boolean(options.shadows);
+    updateShadowsToggle();
     const counts = [...elements.count];
     const radio = counts.find(r => Number(r.value) === options.count)
         ?? counts.find(r => Number(r.value) === defaultOptions.count);
@@ -491,6 +516,8 @@ function startGame(options) {
     game = {
         targets: buildTargets(options),
         perTurn: options.darts,
+        flight: options.animation ? THROW_DURATION : 0,
+        shadows: options.shadows,
         count: options.count,
         turn: 0,
         correct: 0,
@@ -512,7 +539,9 @@ function throwTurn() {
         game.darts.push({
             ...target,
             point: randomPointAwayFrom(target, game.darts),
-            thrownAt: start + i * (THROW_DURATION + THROW_PAUSE)
+            thrownAt: start + i * (game.flight + THROW_PAUSE),
+            flight: game.flight,
+            shadow: game.shadows
         });
     }
     game.turn++;
@@ -525,15 +554,14 @@ function throwTurn() {
     animationFrame = requestAnimationFrame(animateTurn);
 }
 
-// Redraws every frame until the last dart's impact ring has faded.
+// Redraws every frame until the last dart has landed and settled.
 function animateTurn(now) {
     if (!game) return;
     drawDartboard();
 
     const last = game.darts[game.darts.length - 1];
-    const t = throwProgress(last, now);
-    if (t >= 1) game.waiting = true;
-    if (t < 1 + IMPACT_DURATION / THROW_DURATION) animationFrame = requestAnimationFrame(animateTurn);
+    if (now >= landsAt(last)) game.waiting = true;
+    if (now < settlesAt(last)) animationFrame = requestAnimationFrame(animateTurn);
 }
 
 // e.g. "T20 + 5 + D3 = 71"

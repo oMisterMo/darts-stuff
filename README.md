@@ -10,7 +10,7 @@ Early work in progress. So far the board is drawn:
 - Single, treble and double rings in black, cream, red and green
 - Outer bull (25) and inner bull (50)
 - Silver wires (the spider) around the rings and between segments
-- A counting drill: choose 1, 2 or 3 darts a turn, pick singles, doubles and/or triples and 5, 10, 20 or 50 turns (each mode remembers its last choices). The darts are thrown at the board one after another, and once they've all landed you type their total on the number pad. Wrong answers show the breakdown, such as `T20 + 5 + D3 = 71`, and the end screen lists your score and mistakes
+- A counting drill: choose 1, 2 or 3 darts a turn, pick singles, doubles and/or triples and 5, 10, 20 or 50 turns and whether to show the throw animation and shadows (each mode remembers its last choices). The darts are thrown at the board one after another, and once they've all landed you type their total on the number pad. Wrong answers show the breakdown, such as `T20 + 5 + D3 = 71`, and the end screen lists your score and mistakes
 - A large number pad for entering scores. The keyboard's digits, Backspace and Enter work too
 - The board and pad scale down to fit phone screens
 

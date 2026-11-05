@@ -115,6 +115,11 @@ main.screen {
         color: #777;
     }
 
+    label:has(:disabled) {
+        color: #AAA;
+        cursor: default;
+    }
+
     .choices {
         display: flex;
         justify-content: space-between;
