@@ -246,8 +246,8 @@ function randomPointAwayFrom(target, darts) {
 // Throw animation timings in ms. Each dart flies for THROW_DURATION, then
 // the next is thrown after THROW_PAUSE. The impact ring shows on landing.
 const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const THROW_DURATION = REDUCED_MOTION ? 1 : 380;
-const THROW_PAUSE = 350;
+const THROW_DURATION = REDUCED_MOTION ? 1 : 680;
+const THROW_PAUSE = 1550;
 const IMPACT_DURATION = REDUCED_MOTION ? 1 : 250;
 
 function easeOutCubic(t) {
