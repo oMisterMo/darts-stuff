@@ -78,20 +78,8 @@ main.screen {
         cursor: pointer;
     }
 
-    button:hover:not(:disabled) {
+    button:hover {
         background-color: #45a049;
-    }
-
-    button:disabled {
-        background-color: #E8E8E8;
-        color: #999;
-        cursor: not-allowed;
-    }
-
-    small {
-        display: block;
-        font-size: 14px;
-        font-weight: normal;
     }
 }
 
@@ -224,6 +212,13 @@ canvas {
 #pad-display.invalid,
 #pad-display.wrong {
     color: #FF6B6B;
+}
+
+/* Room for a breakdown like "T20 + T19 + D16 = 149" */
+#pad-display.wrong {
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: clamp(18px, 5vw, 30px);
 }
 
 #pad-display.right {

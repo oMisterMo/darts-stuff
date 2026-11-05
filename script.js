@@ -146,7 +146,8 @@ function drawDartboard() {
     drawBulls();
     drawWires();
     drawNumbers();
-    if (game?.dart) drawDart(game.dart.point);
+    const now = performance.now();
+    game?.darts.forEach(dart => drawDart(dart, now));
 }
 
 // Returns what a dart landing at canvas point (x, y) scores, e.g.
@@ -229,11 +230,38 @@ function randomPointIn(target) {
     return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
 }
 
-function drawDart(point) {
-    const x = dartboard.x + px(point.x);
-    const y = dartboard.y + px(point.y);
-    const radius = Math.max(5, px(4));
+// Darts in the same turn try to land at least this far apart (mm) so their
+// markers don't hide each other. Small beds like the bull can't always manage it.
+const DART_SPACING = 10;
 
+function randomPointAwayFrom(target, darts) {
+    let point;
+    for (let attempt = 0; attempt < 30; attempt++) {
+        point = randomPointIn(target);
+        if (darts.every(dart => Math.hypot(dart.point.x - point.x, dart.point.y - point.y) >= DART_SPACING)) break;
+    }
+    return point;
+}
+
+// Throw animation timings in ms. Each dart flies for THROW_DURATION, then
+// the next is thrown after THROW_PAUSE. The impact ring shows on landing.
+const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const THROW_DURATION = REDUCED_MOTION ? 1 : 380;
+const THROW_PAUSE = 350;
+const IMPACT_DURATION = REDUCED_MOTION ? 1 : 250;
+
+function easeOutCubic(t) {
+    return 1 - (1 - t) ** 3;
+}
+
+// How far through its flight a dart is at `now`: below 0 it hasn't been
+// thrown, 0–1 it is flying, and above 1 it has landed.
+function throwProgress(dart, now) {
+    return (now - dart.thrownAt) / THROW_DURATION;
+}
+
+function drawMarker(x, y, radius, alpha) {
+    ctx.globalAlpha = alpha;
     ctx.fillStyle = DART_COLOR;
     ctx.strokeStyle = 'white';
     ctx.lineWidth = 2;
@@ -241,6 +269,49 @@ function drawDart(point) {
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    ctx.globalAlpha = 1;
+}
+
+// A dart flies up from below the board in an arc, shrinking as it moves
+// away from the player, while its shadow closes in on the landing spot.
+function drawDart(dart, now) {
+    const t = throwProgress(dart, now);
+    if (t < 0) return;
+
+    const x = dartboard.x + px(dart.point.x);
+    const y = dartboard.y + px(dart.point.y);
+    const radius = Math.max(5, px(4));
+
+    if (t < 1) {
+        const e = easeOutCubic(t);
+        const startX = dartboard.x;
+        const startY = canvasHeight + radius * 3;
+        const lift = Math.sin(Math.PI * t) * canvasHeight * 0.15;
+
+        ctx.fillStyle = `rgba(0, 0, 0, ${0.35 * e})`;
+        ctx.beginPath();
+        ctx.arc(x, y, radius * (1 + (1 - e)), 0, Math.PI * 2);
+        ctx.fill();
+
+        drawMarker(
+            startX + (x - startX) * e,
+            startY + (y - startY) * e - lift,
+            radius * (1 + 2.5 * (1 - e)),
+            Math.min(1, t * 4)
+        );
+        return;
+    }
+
+    drawMarker(x, y, radius, 1);
+
+    const impact = (t - 1) * THROW_DURATION / IMPACT_DURATION;
+    if (impact < 1) {
+        ctx.strokeStyle = `rgba(255, 255, 255, ${1 - impact})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, radius * (1 + 2 * impact), 0, Math.PI * 2);
+        ctx.stroke();
+    }
 }
 
 // ---- Number pad ----
@@ -292,15 +363,19 @@ document.addEventListener('keydown', event => {
 
 // ---- Screens and game flow ----
 
-// How long the right or wrong answer is shown before the next dart, in ms.
+// How long the result is shown before the next turn, in ms. A wrong answer
+// stays longer, with extra time per dart to read the breakdown.
 const RIGHT_DELAY = 600;
-const WRONG_DELAY = 1800;
+const WRONG_DELAY = 1200;
+const WRONG_DELAY_PER_DART = 600;
 
 const homeScreen = document.getElementById('home');
 const gameScreen = document.getElementById('game');
 const resultsScreen = document.getElementById('results');
 const optionsDialog = document.getElementById('options');
 const optionsForm = optionsDialog.querySelector('form');
+const optionsTitle = document.getElementById('options-title');
+const countLegend = document.getElementById('count-legend');
 const optionsError = document.getElementById('options-error');
 const progressText = document.getElementById('progress');
 const tallyText = document.getElementById('tally');
@@ -309,7 +384,10 @@ const tallyText = document.getElementById('tally');
 // `waiting` is true while the player can type an answer.
 let game = null;
 let lastOptions = null;
-let nextDartTimer = 0;
+let nextTurnTimer = 0;
+let animationFrame = 0;
+// Darts per turn for the mode picked on the home screen
+let chosenDarts = 1;
 
 function showScreen(screen) {
     [homeScreen, gameScreen, resultsScreen].forEach(s => { s.hidden = s !== screen; });
@@ -318,6 +396,7 @@ function showScreen(screen) {
 function readOptions() {
     const data = new FormData(optionsForm);
     return {
+        darts: chosenDarts,
         singles: data.has('singles'),
         doubles: data.has('doubles'),
         triples: data.has('triples'),
@@ -325,9 +404,19 @@ function readOptions() {
     };
 }
 
-document.getElementById('mode-1').addEventListener('click', () => {
-    optionsError.hidden = true;
-    optionsDialog.showModal();
+// With one dart a turn the count is darts, otherwise it is turns.
+function turnName(darts) {
+    return darts === 1 ? 'Dart' : 'Turn';
+}
+
+document.querySelectorAll('#modes [data-darts]').forEach(button => {
+    button.addEventListener('click', () => {
+        chosenDarts = Number(button.dataset.darts);
+        optionsTitle.textContent = button.textContent;
+        countLegend.textContent = `${turnName(chosenDarts)}s`;
+        optionsError.hidden = true;
+        optionsDialog.showModal();
+    });
 });
 
 optionsForm.addEventListener('submit', event => {
@@ -345,32 +434,61 @@ function startGame(options) {
     lastOptions = options;
     game = {
         targets: buildTargets(options),
+        perTurn: options.darts,
         count: options.count,
-        thrown: 0,
+        turn: 0,
         correct: 0,
         misses: [],
-        dart: null,
+        darts: [],
         waiting: false
     };
     showScreen(gameScreen);
-    throwDart();
+    throwTurn();
 }
 
-function throwDart() {
-    const target = randomItem(game.targets);
-    game.dart = { ...target, point: randomPointIn(target) };
-    game.thrown++;
-    game.waiting = true;
+// Throws the turn's darts one after another. The pad accepts an answer once
+// the last one has landed.
+function throwTurn() {
+    const start = performance.now();
+    game.darts = [];
+    for (let i = 0; i < game.perTurn; i++) {
+        const target = randomItem(game.targets);
+        game.darts.push({
+            ...target,
+            point: randomPointAwayFrom(target, game.darts),
+            thrownAt: start + i * (THROW_DURATION + THROW_PAUSE)
+        });
+    }
+    game.turn++;
+    game.waiting = false;
     padEntry = '';
     showPadEntry();
-    progressText.textContent = `Dart ${game.thrown} / ${game.count}`;
+    progressText.textContent = `${turnName(game.perTurn)} ${game.turn} / ${game.count}`;
     tallyText.textContent = `✓ ${game.correct}`;
+    cancelAnimationFrame(animationFrame);
+    animationFrame = requestAnimationFrame(animateTurn);
+}
+
+// Redraws every frame until the last dart's impact ring has faded.
+function animateTurn(now) {
+    if (!game) return;
     drawDartboard();
+
+    const last = game.darts[game.darts.length - 1];
+    const t = throwProgress(last, now);
+    if (t >= 1) game.waiting = true;
+    if (t < 1 + IMPACT_DURATION / THROW_DURATION) animationFrame = requestAnimationFrame(animateTurn);
+}
+
+// e.g. "T20 + 5 + D3 = 71"
+function describeTurn(darts) {
+    const total = darts.reduce((sum, dart) => sum + dart.score, 0);
+    return { text: darts.map(dart => dart.label).join(' + '), total };
 }
 
 function checkAnswer(answer) {
-    const { dart } = game;
-    const right = answer === dart.score;
+    const { text, total } = describeTurn(game.darts);
+    const right = answer === total;
     game.waiting = false;
 
     if (right) {
@@ -378,15 +496,16 @@ function checkAnswer(answer) {
         tallyText.textContent = `✓ ${game.correct}`;
         padDisplay.className = 'right';
     } else {
-        game.misses.push({ label: dart.label, score: dart.score, answer });
-        padDisplay.textContent = `${dart.label} = ${dart.score}`;
+        game.misses.push({ text, total, answer });
+        padDisplay.textContent = `${text} = ${total}`;
         padDisplay.className = 'wrong';
     }
 
-    nextDartTimer = setTimeout(() => {
-        if (game.thrown < game.count) throwDart();
+    const delay = right ? RIGHT_DELAY : WRONG_DELAY + game.perTurn * WRONG_DELAY_PER_DART;
+    nextTurnTimer = setTimeout(() => {
+        if (game.turn < game.count) throwTurn();
         else showResults();
-    }, right ? RIGHT_DELAY : WRONG_DELAY);
+    }, delay);
 }
 
 function showResults() {
@@ -394,7 +513,7 @@ function showResults() {
     const list = document.getElementById('results-misses');
     list.replaceChildren(...game.misses.map(miss => {
         const item = document.createElement('li');
-        item.textContent = `${miss.label} is ${miss.score}, you said ${miss.answer}`;
+        item.textContent = `${miss.text} is ${miss.total}, you said ${miss.answer}`;
         return item;
     }));
     game = null;
@@ -402,7 +521,8 @@ function showResults() {
 }
 
 function quitGame() {
-    clearTimeout(nextDartTimer);
+    clearTimeout(nextTurnTimer);
+    cancelAnimationFrame(animationFrame);
     game = null;
     showScreen(homeScreen);
 }

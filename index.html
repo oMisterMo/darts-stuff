@@ -13,15 +13,15 @@
         <h1>Darts counting</h1>
         <p>Pick how many darts to add up each turn.</p>
         <div id="modes">
-            <button id="mode-1">1 dart</button>
-            <button disabled>2 darts <small>Coming soon</small></button>
-            <button disabled>3 darts <small>Coming soon</small></button>
+            <button data-darts="1">1 dart</button>
+            <button data-darts="2">2 darts</button>
+            <button data-darts="3">3 darts</button>
         </div>
     </main>
 
     <dialog id="options">
         <form method="dialog">
-            <h2>1 dart</h2>
+            <h2 id="options-title">1 dart</h2>
             <fieldset>
                 <legend>Include</legend>
                 <label><input type="checkbox" name="singles" checked> Singles <small>(and 25)</small></label>
@@ -29,7 +29,7 @@
                 <label><input type="checkbox" name="triples" checked> Triples</label>
             </fieldset>
             <fieldset>
-                <legend>Darts</legend>
+                <legend id="count-legend">Darts</legend>
                 <div class="choices">
                     <label><input type="radio" name="count" value="5"> 5</label>
                     <label><input type="radio" name="count" value="10" checked> 10</label>
