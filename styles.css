@@ -259,7 +259,8 @@ canvas {
         background-color: #D6D6D6;
     }
 
-    button:active {
+    button:active,
+    button.pressed {
         background-color: #C4C4C4;
     }
 
@@ -270,6 +271,10 @@ canvas {
 
     #pad-enter:hover {
         background-color: #45a049;
+    }
+
+    #pad-enter.pressed {
+        background-color: #3D8B40;
     }
 
     /* While darts are being thrown */

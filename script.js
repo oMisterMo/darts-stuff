@@ -372,11 +372,27 @@ function pressEnter() {
     checkAnswer(Number(padEntry));
 }
 
+// Touches act on touchstart, not click, which only fires once the finger
+// lifts. Cancelling the touchstart stops the click that would follow, but
+// also :active, so the `pressed` class shows the press instead. Each finger
+// gets its own touchstart, so two-thumb typing works. Mice still use click.
+function onPress(button, action) {
+    button.addEventListener('touchstart', event => {
+        event.preventDefault();
+        button.classList.add('pressed');
+        action();
+    }, { passive: false });
+    ['touchend', 'touchcancel'].forEach(type => {
+        button.addEventListener(type, () => button.classList.remove('pressed'));
+    });
+    button.addEventListener('click', action);
+}
+
 document.querySelectorAll('#pad-keys [data-digit]').forEach(button => {
-    button.addEventListener('click', () => pressDigit(button.dataset.digit));
+    onPress(button, () => pressDigit(button.dataset.digit));
 });
-document.getElementById('pad-delete').addEventListener('click', pressDelete);
-document.getElementById('pad-enter').addEventListener('click', pressEnter);
+onPress(document.getElementById('pad-delete'), pressDelete);
+onPress(document.getElementById('pad-enter'), pressEnter);
 
 document.addEventListener('keydown', event => {
     if (event.ctrlKey || event.metaKey || event.altKey || gameScreen.hidden) return;
