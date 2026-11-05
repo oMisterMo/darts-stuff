@@ -146,6 +146,7 @@ function drawDartboard() {
     drawBulls();
     drawWires();
     drawNumbers();
+    if (game?.dart) drawDart(game.dart.point);
 }
 
 // Returns what a dart landing at canvas point (x, y) scores, e.g.
@@ -171,6 +172,79 @@ function scoreAt(x, y) {
     return { label: `${number}`, score: number };
 }
 
+// ---- Throwing darts ----
+
+// Keeps random darts this far (mm) from a wire, so it is always clear which
+// bed they landed in.
+const WIRE_MARGIN = 1.5;
+const DART_COLOR = '#2E7DFF';
+
+function randomBetween(min, max) {
+    return min + Math.random() * (max - min);
+}
+
+function randomItem(items) {
+    return items[Math.floor(Math.random() * items.length)];
+}
+
+// The beds a dart can be aimed at for the chosen options. The outer bull goes
+// with the singles and the bull with the doubles, as in a darts checkout.
+function buildTargets({ singles, doubles, triples }) {
+    const targets = [];
+    SEGMENT_NUMBERS.forEach((number, index) => {
+        if (singles) targets.push({ kind: 'single', index, label: `${number}`, score: number });
+        if (doubles) targets.push({ kind: 'double', index, label: `D${number}`, score: number * 2 });
+        if (triples) targets.push({ kind: 'triple', index, label: `T${number}`, score: number * 3 });
+    });
+    if (singles) targets.push({ kind: 'outerBull', label: '25', score: 25 });
+    if (doubles) targets.push({ kind: 'bull', label: 'Bull', score: 50 });
+    return targets;
+}
+
+// A random point inside the target's bed, in mm from the board centre, so
+// the dart stays in place when the board is resized.
+function randomPointIn(target) {
+    const { innerBull, outerBull, trebleInner, trebleOuter, doubleInner, doubleOuter } = dartboard;
+    const m = WIRE_MARGIN;
+    let radius;
+    let angle = randomBetween(0, Math.PI * 2);
+
+    if (target.kind === 'bull') {
+        radius = randomBetween(0, innerBull - m);
+    } else if (target.kind === 'outerBull') {
+        radius = randomBetween(innerBull + m, outerBull - m);
+    } else {
+        if (target.kind === 'triple') radius = randomBetween(trebleInner + m, trebleOuter - m);
+        else if (target.kind === 'double') radius = randomBetween(doubleInner + m, doubleOuter - m);
+        // Inner or outer single, equally likely
+        else if (Math.random() < 0.5) radius = randomBetween(outerBull + m, trebleInner - m);
+        else radius = randomBetween(trebleOuter + m, doubleInner - m);
+
+        // Keep clear of the radial wires: the margin as an angle at this radius
+        const angleMargin = m / radius;
+        const start = segmentStartAngle(target.index);
+        angle = randomBetween(start + angleMargin, start + SEGMENT_ANGLE - angleMargin);
+    }
+
+    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+}
+
+function drawDart(point) {
+    const x = dartboard.x + px(point.x);
+    const y = dartboard.y + px(point.y);
+    const radius = Math.max(5, px(4));
+
+    ctx.fillStyle = DART_COLOR;
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+}
+
+// ---- Number pad ----
+
 // Three darts can score at most 180 in a visit.
 const MAX_VISIT_SCORE = 180;
 const MAX_PAD_DIGITS = 3;
@@ -180,26 +254,25 @@ let padEntry = '';
 
 function showPadEntry() {
     padDisplay.textContent = padEntry;
-    padDisplay.classList.toggle('invalid', Number(padEntry) > MAX_VISIT_SCORE);
+    padDisplay.className = Number(padEntry) > MAX_VISIT_SCORE ? 'invalid' : '';
 }
 
 function pressDigit(digit) {
-    if (padEntry.length >= MAX_PAD_DIGITS) return;
+    if (!game?.waiting || padEntry.length >= MAX_PAD_DIGITS) return;
     // Avoids entries like "07"
     padEntry = padEntry === '0' ? digit : padEntry + digit;
     showPadEntry();
 }
 
 function pressDelete() {
+    if (!game?.waiting) return;
     padEntry = padEntry.slice(0, -1);
     showPadEntry();
 }
 
-// Nothing uses the score yet, entering it just clears the pad.
 function pressEnter() {
-    if (padEntry === '' || Number(padEntry) > MAX_VISIT_SCORE) return;
-    padEntry = '';
-    showPadEntry();
+    if (!game?.waiting || padEntry === '' || Number(padEntry) > MAX_VISIT_SCORE) return;
+    checkAnswer(Number(padEntry));
 }
 
 document.querySelectorAll('#pad-keys [data-digit]').forEach(button => {
@@ -209,13 +282,134 @@ document.getElementById('pad-delete').addEventListener('click', pressDelete);
 document.getElementById('pad-enter').addEventListener('click', pressEnter);
 
 document.addEventListener('keydown', event => {
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.ctrlKey || event.metaKey || event.altKey || gameScreen.hidden) return;
     if (/^[0-9]$/.test(event.key)) pressDigit(event.key);
     else if (event.key === 'Backspace') pressDelete();
     else if (event.key === 'Enter') pressEnter();
     else return;
     event.preventDefault();
 });
+
+// ---- Screens and game flow ----
+
+// How long the right or wrong answer is shown before the next dart, in ms.
+const RIGHT_DELAY = 600;
+const WRONG_DELAY = 1800;
+
+const homeScreen = document.getElementById('home');
+const gameScreen = document.getElementById('game');
+const resultsScreen = document.getElementById('results');
+const optionsDialog = document.getElementById('options');
+const optionsForm = optionsDialog.querySelector('form');
+const optionsError = document.getElementById('options-error');
+const progressText = document.getElementById('progress');
+const tallyText = document.getElementById('tally');
+
+// The game in progress, or null on the home and results screens.
+// `waiting` is true while the player can type an answer.
+let game = null;
+let lastOptions = null;
+let nextDartTimer = 0;
+
+function showScreen(screen) {
+    [homeScreen, gameScreen, resultsScreen].forEach(s => { s.hidden = s !== screen; });
+}
+
+function readOptions() {
+    const data = new FormData(optionsForm);
+    return {
+        singles: data.has('singles'),
+        doubles: data.has('doubles'),
+        triples: data.has('triples'),
+        count: Number(data.get('count'))
+    };
+}
+
+document.getElementById('mode-1').addEventListener('click', () => {
+    optionsError.hidden = true;
+    optionsDialog.showModal();
+});
+
+optionsForm.addEventListener('submit', event => {
+    if (event.submitter?.value !== 'ok') return;
+    const options = readOptions();
+    if (!options.singles && !options.doubles && !options.triples) {
+        event.preventDefault();
+        optionsError.hidden = false;
+        return;
+    }
+    startGame(options);
+});
+
+function startGame(options) {
+    lastOptions = options;
+    game = {
+        targets: buildTargets(options),
+        count: options.count,
+        thrown: 0,
+        correct: 0,
+        misses: [],
+        dart: null,
+        waiting: false
+    };
+    showScreen(gameScreen);
+    throwDart();
+}
+
+function throwDart() {
+    const target = randomItem(game.targets);
+    game.dart = { ...target, point: randomPointIn(target) };
+    game.thrown++;
+    game.waiting = true;
+    padEntry = '';
+    showPadEntry();
+    progressText.textContent = `Dart ${game.thrown} / ${game.count}`;
+    tallyText.textContent = `✓ ${game.correct}`;
+    drawDartboard();
+}
+
+function checkAnswer(answer) {
+    const { dart } = game;
+    const right = answer === dart.score;
+    game.waiting = false;
+
+    if (right) {
+        game.correct++;
+        tallyText.textContent = `✓ ${game.correct}`;
+        padDisplay.className = 'right';
+    } else {
+        game.misses.push({ label: dart.label, score: dart.score, answer });
+        padDisplay.textContent = `${dart.label} = ${dart.score}`;
+        padDisplay.className = 'wrong';
+    }
+
+    nextDartTimer = setTimeout(() => {
+        if (game.thrown < game.count) throwDart();
+        else showResults();
+    }, right ? RIGHT_DELAY : WRONG_DELAY);
+}
+
+function showResults() {
+    document.getElementById('results-score').textContent = `${game.correct} / ${game.count} correct`;
+    const list = document.getElementById('results-misses');
+    list.replaceChildren(...game.misses.map(miss => {
+        const item = document.createElement('li');
+        item.textContent = `${miss.label} is ${miss.score}, you said ${miss.answer}`;
+        return item;
+    }));
+    game = null;
+    showScreen(resultsScreen);
+}
+
+function quitGame() {
+    clearTimeout(nextDartTimer);
+    game = null;
+    showScreen(homeScreen);
+}
+
+document.getElementById('quit').addEventListener('click', quitGame);
+document.getElementById('menu').addEventListener('click', quitGame);
+document.getElementById('again').addEventListener('click', () => startGame(lastOptions));
 
 // Matches the canvas to the size it is shown at, so it fills the full width
 // and stays sharp on high-DPI screens. Drawing and scoreAt both work in CSS

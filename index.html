@@ -9,7 +9,49 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
+    <main id="home" class="screen">
+        <h1>Darts counting</h1>
+        <p>Pick how many darts to add up each turn.</p>
+        <div id="modes">
+            <button id="mode-1">1 dart</button>
+            <button disabled>2 darts <small>Coming soon</small></button>
+            <button disabled>3 darts <small>Coming soon</small></button>
+        </div>
+    </main>
+
+    <dialog id="options">
+        <form method="dialog">
+            <h2>1 dart</h2>
+            <fieldset>
+                <legend>Include</legend>
+                <label><input type="checkbox" name="singles" checked> Singles <small>(and 25)</small></label>
+                <label><input type="checkbox" name="doubles" checked> Doubles <small>(and bull)</small></label>
+                <label><input type="checkbox" name="triples" checked> Triples</label>
+            </fieldset>
+            <fieldset>
+                <legend>Darts</legend>
+                <div class="choices">
+                    <label><input type="radio" name="count" value="5"> 5</label>
+                    <label><input type="radio" name="count" value="10" checked> 10</label>
+                    <label><input type="radio" name="count" value="20"> 20</label>
+                    <label><input type="radio" name="count" value="50"> 50</label>
+                </div>
+            </fieldset>
+            <p id="options-error" class="error" hidden>Include at least one of singles, doubles or triples.</p>
+            <div class="actions">
+                <button value="cancel" formnovalidate>Cancel</button>
+                <button value="ok" class="primary">OK</button>
+            </div>
+        </form>
+    </dialog>
+
+    <div id="game" class="container screen" hidden>
+        <header id="game-bar">
+            <button id="quit" aria-label="Back to menu">✕</button>
+            <span id="progress"></span>
+            <span id="tally"></span>
+        </header>
+
         <div id="board">
             <canvas id="canvas" width="800" height="600"></canvas>
         </div>
@@ -31,12 +73,17 @@
                 <button id="pad-enter">Enter</button>
             </div>
         </div>
-
-        <!-- <div id="controls">
-            <button id="play">Play</button>
-            <button id="reset">Reset</button>
-        </div> -->
     </div>
+
+    <main id="results" class="screen" hidden>
+        <h1>Done</h1>
+        <p id="results-score"></p>
+        <ul id="results-misses"></ul>
+        <div class="actions">
+            <button id="menu">Menu</button>
+            <button id="again" class="primary">Play again</button>
+        </div>
+    </main>
 
     <script src="script.js"></script>
 </body>

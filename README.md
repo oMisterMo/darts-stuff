@@ -10,8 +10,8 @@ Early work in progress. So far the board is drawn:
 - Single, treble and double rings in black, cream, red and green
 - Outer bull (25) and inner bull (50)
 - Silver wires (the spider) around the rings and between segments
-- Hovering over the board shows what a dart there would score, such as `T20 (60)`
-- A large number pad below the board for entering a visit score (0–180). The keyboard's digits, Backspace and Enter work too. Entered scores are only shown for now
+- A counting drill: choose 1 dart (2 and 3 darts are coming), pick singles, doubles and/or triples and 5, 10, 20 or 50 darts. A dart lands on the board and you type its score on the number pad. Wrong answers show the right one, and the end screen lists your score and mistakes
+- A large number pad for entering scores. The keyboard's digits, Backspace and Enter work too
 - The board and pad scale down to fit phone screens
 
 ## Running
@@ -24,7 +24,7 @@ Open `index.html` in a browser. The page uses nested CSS, so it needs a recent b
 | --- | --- |
 | `index.html` | Page markup |
 | `styles.css` | Styles |
-| `script.js` | Drawing, scoring and the number pad |
+| `script.js` | Drawing, scoring, the number pad and the game |
 | `favicon.svg` | Browser tab icon |
 | `apple-touch-icon.png` | 180×180 home screen icon for iPhone and iPad |
 
@@ -43,3 +43,5 @@ The drawing functions in `script.js` are:
 ## Configuration
 
 Board sizes are in the `dartboard` object, in millimetres from the centre, following the standard tournament board (double ring outer edge at 170 mm). `dartboard.scale` converts millimetres to pixels. It is recalculated whenever the canvas changes size, so the board always fits the space above the number pad.
+
+`WIRE_MARGIN` keeps random darts clear of the wires, and `RIGHT_DELAY` and `WRONG_DELAY` set how long an answer is shown before the next dart.
