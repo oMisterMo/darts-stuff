@@ -89,6 +89,12 @@ main.screen {
     border: none;
     border-radius: 12px;
     padding: 24px;
+    /* Tapping the options shouldn't select text or open the
+       long-press menu on mobile */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
 
     &::backdrop {
         background-color: #0008;
