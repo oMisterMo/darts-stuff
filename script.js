@@ -351,25 +351,38 @@ let padEntry = '';
 
 function showPadEntry() {
     padDisplay.textContent = padEntry;
-    padDisplay.className = Number(padEntry) > MAX_VISIT_SCORE ? 'invalid' : '';
+    padDisplay.className = padEntry === '' || entryValid(Number(padEntry)) ? '' : 'invalid';
+}
+
+// The pad takes input while a drill turn waits for an answer, and at any
+// time during a 301 or 501 game.
+function padReady() {
+    return Boolean(game?.waiting || match);
+}
+
+// A drill answer can be any total up to 180, a match visit only one that
+// three darts can actually score.
+function entryValid(score) {
+    return match ? VISIT_SCORES.has(score) : score <= MAX_VISIT_SCORE;
 }
 
 function pressDigit(digit) {
-    if (!game?.waiting || padEntry.length >= MAX_PAD_DIGITS) return;
+    if (!padReady() || padEntry.length >= MAX_PAD_DIGITS) return;
     // Avoids entries like "07"
     padEntry = padEntry === '0' ? digit : padEntry + digit;
     showPadEntry();
 }
 
 function pressDelete() {
-    if (!game?.waiting) return;
+    if (!padReady()) return;
     padEntry = padEntry.slice(0, -1);
     showPadEntry();
 }
 
 function pressEnter() {
-    if (!game?.waiting || padEntry === '' || Number(padEntry) > MAX_VISIT_SCORE) return;
-    checkAnswer(Number(padEntry));
+    if (!padReady() || padEntry === '' || !entryValid(Number(padEntry))) return;
+    if (match) submitVisit(Number(padEntry));
+    else checkAnswer(Number(padEntry));
 }
 
 // Touches act on touchstart, not click, which only fires once the finger
@@ -421,11 +434,19 @@ const countLegend = document.getElementById('count-legend');
 const optionsError = document.getElementById('options-error');
 const progressText = document.getElementById('progress');
 const tallyText = document.getElementById('tally');
+const undoButton = document.getElementById('undo');
+const boardArea = document.getElementById('board');
+const scoreboard = document.getElementById('scoreboard');
+const resultsScore = document.getElementById('results-score');
+const resultsList = document.getElementById('results-misses');
 
 // The game in progress, or null on the home and results screens.
 // `waiting` is true while the player can type an answer.
 let game = null;
-let lastOptions = null;
+// The 301 or 501 game in progress, or null. Only one of game and match is set.
+let match = null;
+// Starts the last game again, for the Play again button
+let replay = null;
 let nextTurnTimer = 0;
 let animationFrame = 0;
 // Darts per turn for the mode picked on the home screen
@@ -433,6 +454,16 @@ let chosenDarts = 1;
 
 function showScreen(screen) {
     [homeScreen, gameScreen, resultsScreen].forEach(s => { s.hidden = s !== screen; });
+}
+
+// The game screen shows the board and tally for the drill, or the
+// scoreboard and undo button for 301 and 501.
+function showGameScreen(isMatch) {
+    boardArea.hidden = isMatch;
+    tallyText.hidden = isMatch;
+    scoreboard.hidden = !isMatch;
+    undoButton.hidden = !isMatch;
+    showScreen(gameScreen);
 }
 
 // Reads the checkboxes directly rather than with FormData, which skips
@@ -471,22 +502,30 @@ function storageKey(darts) {
     return `darts-options-${darts}`;
 }
 
-function loadOptions(darts) {
+function loadSaved(key, defaults) {
     try {
-        const saved = JSON.parse(localStorage.getItem(storageKey(darts)));
-        if (saved && typeof saved === 'object') return { ...defaultOptions, ...saved };
+        const saved = JSON.parse(localStorage.getItem(key));
+        if (saved && typeof saved === 'object') return { ...defaults, ...saved };
     } catch {
         // Storage blocked or the saved value is broken, use the defaults
     }
-    return defaultOptions;
+    return defaults;
 }
 
-function saveOptions({ darts, singles, doubles, triples, count, animation, shadows }) {
+function save(key, value) {
     try {
-        localStorage.setItem(storageKey(darts), JSON.stringify({ singles, doubles, triples, count, animation, shadows }));
+        localStorage.setItem(key, JSON.stringify(value));
     } catch {
         // Storage blocked or full, the options just won't be remembered
     }
+}
+
+function loadOptions(darts) {
+    return loadSaved(storageKey(darts), defaultOptions);
+}
+
+function saveOptions({ darts, singles, doubles, triples, count, animation, shadows }) {
+    save(storageKey(darts), { singles, doubles, triples, count, animation, shadows });
 }
 
 // Sets the form to `options`. A count with no matching radio button falls
@@ -534,7 +573,8 @@ optionsForm.addEventListener('submit', event => {
 });
 
 function startGame(options) {
-    lastOptions = options;
+    replay = () => startGame(options);
+    match = null;
     game = {
         targets: buildTargets(options),
         perTurn: options.darts,
@@ -547,7 +587,7 @@ function startGame(options) {
         darts: [],
         waiting: false
     };
-    showScreen(gameScreen);
+    showGameScreen(false);
     throwTurn();
 }
 
@@ -619,9 +659,8 @@ function checkAnswer(answer) {
 }
 
 function showResults() {
-    document.getElementById('results-score').textContent = `${game.correct} / ${game.count} correct`;
-    const list = document.getElementById('results-misses');
-    list.replaceChildren(...game.misses.map(miss => {
+    resultsScore.textContent = `${game.correct} / ${game.count} correct`;
+    resultsList.replaceChildren(...game.misses.map(miss => {
         const item = document.createElement('li');
         item.textContent = `${miss.text} is ${miss.total}, you said ${miss.answer}`;
         return item;
@@ -634,12 +673,194 @@ function quitGame() {
     clearTimeout(nextTurnTimer);
     cancelAnimationFrame(animationFrame);
     game = null;
+    match = null;
     showScreen(homeScreen);
 }
 
 document.getElementById('quit').addEventListener('click', quitGame);
 document.getElementById('menu').addEventListener('click', quitGame);
-document.getElementById('again').addEventListener('click', () => startGame(lastOptions));
+document.getElementById('again').addEventListener('click', () => replay());
+
+// ---- 301 and 501 on a real board ----
+
+// Each player starts on 301 or 501 and types the score of each visit (up
+// to three darts) on the number pad. The first to reach exactly 0 wins.
+// With double out the last dart must be a double or the bull. A visit that
+// goes below 0, leaves 1 or, with double out, reaches 0 without a possible
+// double finish is bust: it scores nothing.
+
+// Each starting score keeps its own last options
+function matchStorageKey(start) {
+    return `darts-options-${start}`;
+}
+
+const matchDialog = document.getElementById('match-options');
+const matchForm = matchDialog.querySelector('form');
+const matchTitle = document.getElementById('match-title');
+// The starting score of the game the dialog is open for
+let matchStart = 501;
+
+// What one dart can score: a miss, any single, double or treble, 25 and bull
+const DART_SCORES = [0, 25, 50, ...SEGMENT_NUMBERS.flatMap(n => [n, n * 2, n * 3])];
+const DOUBLE_SCORES = [50, ...SEGMENT_NUMBERS.map(n => n * 2)];
+
+function sums(first, second) {
+    const totals = new Set();
+    first.forEach(a => second.forEach(b => totals.add(a + b)));
+    return totals;
+}
+
+const TWO_DART_SCORES = sums(DART_SCORES, DART_SCORES);
+// Totals three darts can score. Rules out 163, 166, 169, 172, 173, 175,
+// 176, 178 and 179.
+const VISIT_SCORES = sums(TWO_DART_SCORES, DART_SCORES);
+// Totals a visit can finish on with a double last. The highest is 170, and
+// it rules out 159, 162, 163, 165, 166, 168 and 169.
+const DOUBLE_FINISHES = sums(TWO_DART_SCORES, DOUBLE_SCORES);
+
+function readMatchOptions() {
+    const { elements } = matchForm;
+    return {
+        players: Number([...elements.players].find(radio => radio.checked).value),
+        doubleOut: elements.doubleOut.checked
+    };
+}
+
+const defaultMatchOptions = readMatchOptions();
+
+function showMatchOptions(options) {
+    const { elements } = matchForm;
+    const radios = [...elements.players];
+    const radio = radios.find(r => Number(r.value) === options.players)
+        ?? radios.find(r => Number(r.value) === defaultMatchOptions.players);
+    radio.checked = true;
+    elements.doubleOut.checked = Boolean(options.doubleOut);
+}
+
+document.querySelectorAll('[data-start]').forEach(button => {
+    button.addEventListener('click', () => {
+        matchStart = Number(button.dataset.start);
+        matchTitle.textContent = matchStart;
+        showMatchOptions(loadSaved(matchStorageKey(matchStart), defaultMatchOptions));
+        matchDialog.showModal();
+    });
+});
+
+matchForm.addEventListener('submit', event => {
+    if (event.submitter?.value !== 'ok') return;
+    const options = readMatchOptions();
+    save(matchStorageKey(matchStart), options);
+    startMatch({ ...options, start: matchStart });
+});
+
+// `starter` is the player who throws first. Play again passes it on to the
+// next player, as players take turns to start legs.
+function startMatch({ start, players, doubleOut, starter = 0 }) {
+    replay = () => startMatch({ start, players, doubleOut, starter: (starter + 1) % players });
+    game = null;
+    // Everything else is worked out from the visits, so undo just drops the last one
+    match = { start, players, doubleOut, starter, visits: [] };
+    padEntry = '';
+    setPadEnabled(true);
+    showGameScreen(true);
+    showMatch();
+}
+
+function playerName(player) {
+    return `Player ${player + 1}`;
+}
+
+function currentPlayer() {
+    return (match.starter + match.visits.length) % match.players;
+}
+
+function playerStats(player) {
+    const visits = match.visits.filter(visit => visit.player === player);
+    const scored = visits.reduce((sum, visit) => sum + (visit.bust ? 0 : visit.score), 0);
+    return { remaining: match.start - scored, scored, darts: visits.length * 3, last: visits.at(-1) };
+}
+
+// Points per three darts. Every visit counts as three darts, the finishing one too.
+function average({ scored, darts }) {
+    return darts ? (scored / darts * 3).toFixed(1) : '–';
+}
+
+function isBust(score, remaining) {
+    const left = remaining - score;
+    if (left < 0) return true;
+    if (!match.doubleOut) return false;
+    return left === 1 || (left === 0 && !DOUBLE_FINISHES.has(score));
+}
+
+function submitVisit(score) {
+    const player = currentPlayer();
+    const { remaining } = playerStats(player);
+    const bust = isBust(score, remaining);
+    match.visits.push({ player, score, bust });
+    padEntry = '';
+
+    if (!bust && score === remaining) {
+        showMatchResults(player);
+        return;
+    }
+    showMatch();
+    if (bust) {
+        padDisplay.textContent = `Bust, ${playerName(player)} stays on ${remaining}`;
+        padDisplay.className = 'wrong';
+    }
+}
+
+function undoVisit() {
+    if (!match?.visits.length) return;
+    match.visits.pop();
+    padEntry = '';
+    showMatch();
+}
+
+undoButton.addEventListener('click', undoVisit);
+
+function element(tag, className, text) {
+    const el = document.createElement(tag);
+    el.className = className;
+    el.textContent = text;
+    return el;
+}
+
+function showMatch() {
+    const current = currentPlayer();
+    scoreboard.replaceChildren(...Array.from({ length: match.players }, (_, player) => {
+        const stats = playerStats(player);
+        const last = stats.last ? (stats.last.bust ? 'Bust' : stats.last.score) : '–';
+        const card = element('div', player === current ? 'player active' : 'player', '');
+        card.append(
+            element('div', 'name', playerName(player)),
+            element('div', 'remaining', stats.remaining),
+            element('div', 'stats', `Avg ${average(stats)} · Last ${last}`)
+        );
+        return card;
+    }));
+
+    const visit = Math.floor(match.visits.length / match.players) + 1;
+    progressText.textContent = match.players === 1
+        ? `${match.start} · Visit ${visit}`
+        : `${match.start} · ${playerName(current)} to throw`;
+    undoButton.disabled = match.visits.length === 0;
+    showPadEntry();
+}
+
+function showMatchResults(winner) {
+    const stats = Array.from({ length: match.players }, (_, player) => playerStats(player));
+    resultsScore.textContent = match.players === 1
+        ? `Checked out in ${stats[0].darts} darts`
+        : `${playerName(winner)} wins`;
+    resultsList.replaceChildren(...stats.map((s, player) => {
+        const left = s.remaining ? `, ${s.remaining} left` : '';
+        const name = match.players === 1 ? '' : `${playerName(player)}: `;
+        return element('li', '', `${name}${average(s)} average, ${s.darts} darts${left}`);
+    }));
+    match = null;
+    showScreen(resultsScreen);
+}
 
 // Matches the canvas to the size it is shown at, so it fills the full width
 // and stays sharp on high-DPI screens. Drawing and scoreAt both work in CSS

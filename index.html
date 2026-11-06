@@ -10,16 +10,23 @@
 </head>
 <body>
     <main id="home" class="screen">
-        <h1>Darts counting</h1>
+        <h1>Darts</h1>
+        <h2>Counting drill</h2>
         <p>Pick how many darts to add up each turn.</p>
-        <div id="modes">
+        <div id="modes" class="modes">
             <button data-darts="1">1 dart</button>
             <button data-darts="2">2 darts</button>
             <button data-darts="3">3 darts</button>
         </div>
+        <h2>Play on your board</h2>
+        <p>Keep score of a game on a real dartboard.</p>
+        <div class="modes">
+            <button data-start="301">301</button>
+            <button data-start="501">501</button>
+        </div>
     </main>
 
-    <dialog id="options">
+    <dialog id="options" class="options">
         <form method="dialog">
             <h2 id="options-title">1 dart</h2>
             <fieldset>
@@ -50,16 +57,42 @@
         </form>
     </dialog>
 
+    <dialog id="match-options" class="options">
+        <form method="dialog">
+            <h2 id="match-title">501</h2>
+            <fieldset>
+                <legend>Players</legend>
+                <div class="choices">
+                    <label><input type="radio" name="players" value="1"> 1</label>
+                    <label><input type="radio" name="players" value="2" checked> 2</label>
+                    <label><input type="radio" name="players" value="3"> 3</label>
+                    <label><input type="radio" name="players" value="4"> 4</label>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend>Finish</legend>
+                <label><input type="checkbox" name="doubleOut" checked> Double out</label>
+            </fieldset>
+            <div class="actions">
+                <button value="cancel" formnovalidate>Cancel</button>
+                <button value="ok" class="primary">OK</button>
+            </div>
+        </form>
+    </dialog>
+
     <div id="game" class="container screen" hidden>
         <header id="game-bar">
             <button id="quit" aria-label="Back to menu">✕</button>
             <span id="progress"></span>
             <span id="tally"></span>
+            <button id="undo" aria-label="Undo last visit" hidden>↶</button>
         </header>
 
         <div id="board">
             <canvas id="canvas" width="800" height="600"></canvas>
         </div>
+
+        <div id="scoreboard" hidden></div>
 
         <div id="number-pad">
             <div id="pad-display" aria-live="polite"></div>
