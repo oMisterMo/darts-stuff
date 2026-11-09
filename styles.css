@@ -213,7 +213,7 @@ canvas {
     height: 100%;
 }
 
-/* 501: a card per player, taking the board's place */
+/* 301 and 501: a card per player, taking the board's place */
 #scoreboard {
     flex: 1 1 0;
     min-height: 160px;
@@ -238,8 +238,28 @@ canvas {
     }
 
     .name {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 2px 4px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: none;
+        font: inherit;
         font-size: 18px;
         font-weight: bold;
+        text-align: center;
+        overflow-wrap: anywhere;
+        cursor: text;
+    }
+
+    button.name:hover {
+        border-color: #CCC;
+    }
+
+    input.name {
+        border-color: #999;
+        background-color: white;
     }
 
     .remaining {

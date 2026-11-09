@@ -392,6 +392,9 @@ function pressEnter() {
 function onPress(button, action) {
     button.addEventListener('touchstart', event => {
         event.preventDefault();
+        // Cancelling the touch also stops focus moving, so finish editing
+        // a player's name before the press redraws the scoreboard
+        document.activeElement?.blur();
         button.classList.add('pressed');
         action();
     }, { passive: false });
@@ -409,6 +412,8 @@ onPress(document.getElementById('pad-enter'), pressEnter);
 
 document.addEventListener('keydown', event => {
     if (event.ctrlKey || event.metaKey || event.altKey || gameScreen.hidden) return;
+    // Typing a player's name
+    if (event.target instanceof HTMLInputElement) return;
     if (/^[0-9]$/.test(event.key)) pressDigit(event.key);
     else if (event.key === 'Backspace') pressDelete();
     else if (event.key === 'Enter') pressEnter();
@@ -766,8 +771,53 @@ function startMatch({ start, players, doubleOut, starter = 0 }) {
     showMatch();
 }
 
+// Player names, set by clicking a name on the scoreboard. Shared by 301
+// and 501 and kept between games. A blank name means "Player N".
+const NAMES_STORAGE_KEY = 'darts-player-names';
+
+function loadNames() {
+    const { names } = loadSaved(NAMES_STORAGE_KEY, { names: [] });
+    return Array.isArray(names) ? names.map(name => (typeof name === 'string' ? name : '')) : [];
+}
+
 function playerName(player) {
-    return `Player ${player + 1}`;
+    return loadNames()[player] || `Player ${player + 1}`;
+}
+
+function setPlayerName(player, name) {
+    const names = loadNames();
+    names[player] = name;
+    save(NAMES_STORAGE_KEY, { names });
+}
+
+// Swaps the name for a text field. Enter or clicking away keeps the new
+// name, Escape keeps the old one.
+function editName(player, button) {
+    const input = document.createElement('input');
+    input.className = 'name';
+    input.maxLength = 20;
+    input.value = loadNames()[player] ?? '';
+    input.placeholder = `Player ${player + 1}`;
+    input.setAttribute('aria-label', `Player ${player + 1} name`);
+
+    let done = false;
+    const finish = keep => {
+        if (done) return;
+        done = true;
+        if (keep) setPlayerName(player, input.value.trim());
+        if (match) showMatch();
+    };
+    input.addEventListener('keydown', event => {
+        if (event.key === 'Enter') finish(true);
+        else if (event.key === 'Escape') finish(false);
+        else return;
+        event.preventDefault();
+    });
+    input.addEventListener('blur', () => finish(true));
+
+    button.replaceWith(input);
+    input.focus();
+    input.select();
 }
 
 function currentPlayer() {
@@ -826,6 +876,13 @@ function element(tag, className, text) {
     return el;
 }
 
+function nameButton(player) {
+    const button = element('button', 'name', playerName(player));
+    button.title = 'Change name';
+    button.addEventListener('click', () => editName(player, button));
+    return button;
+}
+
 function showMatch() {
     const current = currentPlayer();
     scoreboard.replaceChildren(...Array.from({ length: match.players }, (_, player) => {
@@ -833,7 +890,7 @@ function showMatch() {
         const last = stats.last ? (stats.last.bust ? 'Bust' : stats.last.score) : '–';
         const card = element('div', player === current ? 'player active' : 'player', '');
         card.append(
-            element('div', 'name', playerName(player)),
+            nameButton(player),
             element('div', 'remaining', stats.remaining),
             element('div', 'stats', `Avg ${average(stats)} · Last ${last}`)
         );

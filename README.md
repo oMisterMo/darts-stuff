@@ -11,7 +11,7 @@ Early work in progress. So far the board is drawn:
 - Outer bull (25) and inner bull (50)
 - Silver wires (the spider) around the rings and between segments
 - A counting drill: choose 1, 2 or 3 darts a turn, pick singles, doubles and/or triples and 5, 10, 20 or 50 turns and whether to show the throw animation and shadows (each mode remembers its last choices). The darts are thrown at the board one after another, and once they've all landed you type their total on the number pad. Wrong answers show the breakdown, such as `T20 + 5 + D3 = 71`, and the end screen lists your score and mistakes
-- 301 and 501 for playing on a real board: 1 to 4 players, with or without double out (remembered between games). Each player types their visit's score on the number pad and the scoreboard shows what's left, the 3-dart average and the last visit. Scores three darts can't make (like 179) are refused, busts score nothing, the ↶ button undoes the last visit, and Play again passes the throw to the next player
+- 301 and 501 for playing on a real board: 1 to 4 players, with or without double out (remembered between games). Click a player's name on the scoreboard to change it. Each player types their visit's score on the number pad and the scoreboard shows what's left, the 3-dart average and the last visit. Scores three darts can't make (like 179) are refused, busts score nothing, the ↶ button undoes the last visit, and Play again passes the throw to the next player
 - A large number pad for entering scores. The keyboard's digits, Backspace and Enter work too
 - The board and pad scale down to fit phone screens
 
