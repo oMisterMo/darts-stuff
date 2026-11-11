@@ -253,14 +253,25 @@ canvas {
         gap: 4px;
         margin: 0;
         padding: 0;
-        list-style: none;
+        border: none;
+        background: none;
+        font: inherit;
         font-weight: bold;
 
-        li {
+        span {
             padding: 4px 8px;
             border-radius: 6px;
             background-color: #1A1A1A;
             color: white;
+        }
+    }
+
+    /* With double out it opens every checkout for the score */
+    button.checkout {
+        cursor: pointer;
+
+        &:hover span {
+            background-color: #444;
         }
     }
 

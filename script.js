@@ -412,6 +412,8 @@ onPress(document.getElementById('pad-enter'), pressEnter);
 
 document.addEventListener('keydown', event => {
     if (event.ctrlKey || event.metaKey || event.altKey || gameScreen.hidden) return;
+    // The checkout dialog is open over the scoreboard
+    if (routesDialog.open) return;
     // Typing a player's name
     if (event.target instanceof HTMLInputElement) return;
     if (/^[0-9]$/.test(event.key)) pressDigit(event.key);
@@ -977,12 +979,19 @@ function showMatch() {
             element('div', 'remaining', stats.remaining),
             element('div', 'stats', `Avg ${average(stats)} · Last ${last}`)
         );
-        // On a finish, the usual checkout runs down the left of the card
+        // On a finish, the usual checkout runs down the left of the card.
+        // With double out, clicking it opens the checkout dialog for the
+        // score, which works out double-out routes.
         const route = checkout(stats.remaining);
         if (route) {
-            const list = element('ol', 'checkout', '');
-            list.setAttribute('aria-label', 'Checkout');
-            list.append(...route.map(dart => element('li', '', dart)));
+            const darts = route.map(dart => element('span', '', dart));
+            const list = element(match.doubleOut ? 'button' : 'div', 'checkout', '');
+            list.setAttribute('aria-label', `Checkout ${route.join(' ')}`);
+            if (match.doubleOut) {
+                list.title = 'Show every checkout';
+                list.addEventListener('click', () => showRoutes(stats.remaining));
+            }
+            list.append(...darts);
             card.append(list);
         }
         card.append(summary);
