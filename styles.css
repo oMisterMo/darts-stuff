@@ -363,16 +363,109 @@ canvas {
 }
 
 /* The other ways to check out on a score from the chart */
+/* Pinned to the top rather than centred, and everything above the keypad
+   keeps to one line, so the keypad doesn't move as darts are entered: only
+   the route list, at the bottom, grows or shrinks. */
 #routes {
     width: min(800px, calc(100% - 40px));
+    margin-top: 20px;
 
+    h2,
+    #routes-usual,
+    .thrown,
+    #throw-status {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    /* Keeps its line when there's no chart route to show */
     #routes-usual {
+        min-height: 1.2em;
         color: #00873E;
         font-weight: bold;
     }
 
+    /* Entering what each dart hit */
+    #throw {
+        margin-bottom: 12px;
+
+        button {
+            padding: 8px 0;
+            border: none;
+            border-radius: 6px;
+            background-color: #E8E8E8;
+            color: #1A1A1A;
+            font: inherit;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: #D6D6D6;
+        }
+
+        button:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+    }
+
+    .thrown {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        font-size: 18px;
+
+        #thrown-darts {
+            font-weight: bold;
+        }
+
+        #throw-undo {
+            margin-left: auto;
+            padding: 6px 14px;
+        }
+    }
+
+    /* Inside #throw so the picked one beats #throw's button colours */
+    #throw .multipliers {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        margin-bottom: 6px;
+
+        button[aria-pressed="true"],
+        button[aria-pressed="true"]:hover {
+            background-color: #1A1A1A;
+            color: white;
+        }
+    }
+
+    #dart-keys {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+        gap: 6px;
+
+        .wide {
+            grid-column: span 2;
+        }
+    }
+
+    #throw-status {
+        font-weight: bold;
+
+        &.done {
+            color: #00873E;
+        }
+
+        &.bust {
+            color: #C8102E;
+        }
+    }
+
     #routes-list {
-        max-height: 60vh;
+        max-height: 40vh;
         margin-bottom: 16px;
         overflow-y: auto;
     }

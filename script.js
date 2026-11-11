@@ -1076,6 +1076,15 @@ const routesDialog = document.getElementById('routes');
 const routesTitle = document.getElementById('routes-title');
 const routesUsual = document.getElementById('routes-usual');
 const routesList = document.getElementById('routes-list');
+const thrownText = document.getElementById('thrown-darts');
+const throwUndo = document.getElementById('throw-undo');
+const throwStatus = document.getElementById('throw-status');
+const dartKeys = document.getElementById('dart-keys');
+const multiplierButtons = [...document.querySelectorAll('#throw [data-multiplier]')];
+
+// The dialog's score and the darts thrown at it so far, as labels
+const attempt = { score: 0, thrown: [] };
+let multiplier = 1;
 
 const DART_VALUES = new Map(LABELLED_DARTS);
 
@@ -1107,15 +1116,59 @@ function inRouteOrder(route) {
     return [...setup, route.at(-1)];
 }
 
-// Opens a dialog with every way to check out on `score`, in 1, 2 and 3
-// darts, one row per group of routes that score the same with each dart,
-// with the chart's route highlighted
+// Opens a dialog with every way to check out on `score`, in 1, 2 and 3 darts
 function showRoutes(score) {
-    const usual = DOUBLE_OUT_CHECKOUTS[score];
-    const usualText = inRouteOrder(usual).join(' ');
-    routesTitle.textContent = score;
-    routesUsual.textContent = `Chart: ${usual.join(' ')}`;
-    routesList.replaceChildren(...[1, 2, 3].map(darts => {
+    attempt.score = score;
+    attempt.thrown = [];
+    setMultiplier(1);
+    showAttempt();
+    routesDialog.showModal();
+}
+
+// The darts entered so far: their total, what's left and how many darts
+// remain, and whether they checked out or went bust (double out)
+function attemptState() {
+    const total = attempt.thrown.reduce((sum, label) => sum + (DART_VALUES.get(label) ?? 0), 0);
+    const left = attempt.score - total;
+    const last = attempt.thrown.at(-1);
+    const onDouble = FINISHING_DOUBLES.some(([label]) => label === last);
+    return {
+        left,
+        darts: 3 - attempt.thrown.length,
+        checkedOut: left === 0 && onDouble,
+        bust: left < 0 || left === 1 || (left === 0 && !onDouble)
+    };
+}
+
+// Shows the darts thrown and the checkouts still open with the darts left
+function showAttempt() {
+    const { left, darts, checkedOut, bust } = attemptState();
+    const thrown = attempt.thrown.length;
+    routesTitle.textContent = thrown && !bust ? `${attempt.score} → ${left} left` : attempt.score;
+    thrownText.textContent = thrown ? attempt.thrown.join(' ') : '–';
+    throwUndo.disabled = !thrown;
+    const finished = checkedOut || bust || darts === 0;
+    dartKeys.querySelectorAll('button').forEach(button => { button.disabled = finished; });
+
+    const usual = left >= 2 ? DOUBLE_OUT_CHECKOUTS[left] : null;
+    routesUsual.textContent = usual ? `Chart for ${left}: ${usual.join(' ')}` : '';
+    if (checkedOut) throwStatus.textContent = 'Checked out!';
+    else if (bust) throwStatus.textContent = `Bust, back to ${attempt.score}`;
+    else if (darts === 0) throwStatus.textContent = `No darts left, ${left} to go`;
+    else if (!thrown) throwStatus.textContent = 'Tap what each dart hits';
+    else throwStatus.textContent = `${left} with ${darts === 1 ? '1 dart' : `${darts} darts`} left`;
+    throwStatus.className = checkedOut ? 'done' : bust ? 'bust' : '';
+
+    showRouteList(finished ? 0 : left, finished ? 0 : darts, usual);
+}
+
+// One section per number of darts up to `maxDarts`, each with a row per
+// group of routes that score the same with each dart, and the chart's route
+// highlighted
+function showRouteList(score, maxDarts, usual) {
+    const usualText = usual ? inRouteOrder(usual).join(' ') : '';
+    const counts = Array.from({ length: maxDarts }, (_, i) => i + 1);
+    routesList.replaceChildren(...counts.map(darts => {
         // Biggest double first (Bull, D20, D19 ...), routesIn's order otherwise
         const doubleRank = route => FINISHING_DOUBLES.findIndex(([label]) => label === route.at(-1));
         const groups = groupRoutes(routesIn(score, darts).sort((x, y) => doubleRank(x) - doubleRank(y)));
@@ -1137,9 +1190,49 @@ function showRoutes(score) {
         }
         return section;
     }));
-    routesDialog.showModal();
     routesList.scrollTop = 0;
 }
+
+function setMultiplier(value) {
+    multiplier = value;
+    multiplierButtons.forEach(button => {
+        button.setAttribute('aria-pressed', String(Number(button.dataset.multiplier) === value));
+    });
+}
+
+multiplierButtons.forEach(button => {
+    button.addEventListener('click', () => setMultiplier(Number(button.dataset.multiplier)));
+});
+
+function throwDart(label) {
+    attempt.thrown.push(label);
+    // Back to single after each dart, as most darts are
+    setMultiplier(1);
+    showAttempt();
+}
+
+// 1 to 20 take the Single, Double or Treble picked above them. 25, Bull and
+// Miss are the same whatever is picked.
+const DART_PREFIXES = { 1: '', 2: 'D', 3: 'T' };
+dartKeys.append(
+    ...Array.from({ length: 20 }, (_, i) => {
+        const button = element('button', '', i + 1);
+        button.type = 'button';
+        button.addEventListener('click', () => throwDart(`${DART_PREFIXES[multiplier]}${i + 1}`));
+        return button;
+    }),
+    ...['25', 'Bull', 'Miss'].map(label => {
+        const button = element('button', 'wide', label);
+        button.type = 'button';
+        button.addEventListener('click', () => throwDart(label));
+        return button;
+    })
+);
+
+throwUndo.addEventListener('click', () => {
+    attempt.thrown.pop();
+    showAttempt();
+});
 
 document.getElementById('chart-back').addEventListener('click', () => showScreen(homeScreen));
 
