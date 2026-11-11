@@ -306,6 +306,28 @@ canvas {
 }
 
 /* Checkouts: the chart of the usual finish for each score */
+/* Back to the menu, in the top right */
+#chart {
+    position: relative;
+}
+
+#chart-back {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 8px;
+    background-color: #E8E8E8;
+    font-size: 20px;
+    cursor: pointer;
+
+    &:hover {
+        background-color: #D6D6D6;
+    }
+}
+
 /* Stays in view while scrolling the chart. The white strip's top padding
    keeps the search clear of a phone's status bar (plus its safe area where
    the browser gives one) and hides the rows scrolling underneath. */
