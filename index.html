@@ -130,8 +130,10 @@
     <main id="chart" class="screen" hidden>
         <h1>Checkouts</h1>
         <p>The usual double-out finish for every score from 170 down.</p>
-        <input id="chart-search" type="search" placeholder="Search, e.g. 121 or D16"
-               aria-label="Search checkouts" autocomplete="off">
+        <div class="chart-search-bar">
+            <input id="chart-search" type="search" inputmode="numeric" placeholder="Search, e.g. 121"
+                   aria-label="Search checkouts by score" autocomplete="off">
+        </div>
         <ol id="chart-list"></ol>
         <p id="chart-empty" hidden>No checkouts match.</p>
         <div class="actions">
@@ -141,6 +143,7 @@
 
     <dialog id="routes" class="options">
         <form method="dialog">
+            <button value="close" class="close" aria-label="Close">✕</button>
             <h2 id="routes-title">121</h2>
             <p id="routes-usual"></p>
             <section id="throw" aria-label="Your darts">
@@ -158,9 +161,6 @@
             </section>
             <p id="throw-status"></p>
             <div id="routes-list"></div>
-            <div class="actions">
-                <button value="close">Close</button>
-            </div>
         </form>
     </dialog>
 

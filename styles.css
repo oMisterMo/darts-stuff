@@ -306,15 +306,22 @@ canvas {
 }
 
 /* Checkouts: the chart of the usual finish for each score */
-#chart-search {
-    /* Stays in view while scrolling the chart */
+/* Stays in view while scrolling the chart. The white strip's top padding
+   keeps the search clear of a phone's status bar (plus its safe area where
+   the browser gives one) and hides the rows scrolling underneath. */
+.chart-search-bar {
     position: sticky;
     top: 0;
     z-index: 1;
+    margin-bottom: 10px;
+    padding: calc(env(safe-area-inset-top, 0px) + 16px) 0 6px;
+    background-color: white;
+}
+
+#chart-search {
     display: block;
     width: 100%;
     box-sizing: border-box;
-    margin-bottom: 10px;
     padding: 12px 14px;
     border: 2px solid #CCC;
     border-radius: 8px;
@@ -369,6 +376,56 @@ canvas {
 #routes {
     width: min(800px, calc(100% - 40px));
     margin-top: 20px;
+    /* The dialog never scrolls: on a short screen the route list shrinks
+       and scrolls on its own */
+    max-height: calc(100dvh - 40px);
+    overflow: hidden;
+
+    &[open] {
+        display: flex;
+        flex-direction: column;
+    }
+
+    form {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+
+        > * {
+            flex: none;
+        }
+    }
+
+    /* The dialog is fixed in place, so this sits in its top right corner */
+    .close {
+        position: absolute;
+        top: 16px;
+        /* In line with the dialog's 24px padding, above Undo */
+        right: 24px;
+        width: 40px;
+        height: 40px;
+        border: none;
+        border-radius: 8px;
+        background-color: #E8E8E8;
+        font-size: 20px;
+        cursor: pointer;
+
+        &:hover {
+            background-color: #D6D6D6;
+        }
+    }
+
+    /* Clear of the close button */
+    h2 {
+        padding-right: 48px;
+    }
+
+    /* Margins don't collapse in the flex layout, so they're set here
+       rather than doubling up */
+    h2,
+    p {
+        margin: 0 0 12px;
+    }
 
     h2,
     #routes-usual,
@@ -465,8 +522,9 @@ canvas {
     }
 
     #routes-list {
-        max-height: 40vh;
-        margin-bottom: 16px;
+        flex: 0 1 auto;
+        min-height: 0;
+        overscroll-behavior: contain;
         overflow-y: auto;
     }
 

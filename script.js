@@ -1048,7 +1048,13 @@ function filterChart() {
     });
     chartEmpty.hidden = shown > 0;
 }
-chartSearch.addEventListener('input', filterChart);
+// Scores only: phones show the number keyboard, and anything else typed
+// or pasted is dropped
+chartSearch.addEventListener('input', () => {
+    const digits = chartSearch.value.replace(/[^0-9]/g, '');
+    if (digits !== chartSearch.value) chartSearch.value = digits;
+    filterChart();
+});
 
 document.getElementById('checkouts-button').addEventListener('click', () => {
     chartSearch.value = '';
