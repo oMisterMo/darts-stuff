@@ -134,6 +134,11 @@ main.screen h2 {
         display: flex;
         justify-content: space-between;
     }
+
+    /* The Addition dialog's 1, 2 and 3 darts buttons */
+    .modes {
+        margin: 0 0 24px;
+    }
 }
 
 #results-score {

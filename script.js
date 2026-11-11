@@ -554,8 +554,16 @@ function turnName(darts) {
     return darts === 1 ? 'Dart' : 'Turn';
 }
 
+// Addition opens a dialog to pick 1, 2 or 3 darts a turn, which then
+// opens that mode's options
+const additionDialog = document.getElementById('addition');
+document.getElementById('addition-button').addEventListener('click', () => {
+    additionDialog.showModal();
+});
+
 document.querySelectorAll('#modes [data-darts]').forEach(button => {
     button.addEventListener('click', () => {
+        additionDialog.close();
         chosenDarts = Number(button.dataset.darts);
         optionsTitle.textContent = button.textContent;
         countLegend.textContent = `${turnName(chosenDarts)}s`;

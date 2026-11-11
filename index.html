@@ -11,12 +11,10 @@
 <body>
     <main id="home" class="screen">
         <h1>Darts</h1>
-        <h2>Counting drill</h2>
-        <p>Pick how many darts to add up each turn.</p>
-        <div id="modes" class="modes">
-            <button data-darts="1">1 dart</button>
-            <button data-darts="2">2 darts</button>
-            <button data-darts="3">3 darts</button>
+        <h2>Counting drills</h2>
+        <p>Practise adding up the darts on the board.</p>
+        <div class="modes">
+            <button id="addition-button">Addition</button>
         </div>
         <h2>Play on your board</h2>
         <p>Keep score of a game on a real dartboard.</p>
@@ -25,6 +23,21 @@
             <button data-start="501">501</button>
         </div>
     </main>
+
+    <dialog id="addition" class="options">
+        <form method="dialog">
+            <h2>Addition</h2>
+            <p>Pick how many darts to add up each turn.</p>
+            <div id="modes" class="modes">
+                <button type="button" data-darts="1">1 dart</button>
+                <button type="button" data-darts="2">2 darts</button>
+                <button type="button" data-darts="3">3 darts</button>
+            </div>
+            <div class="actions">
+                <button value="cancel" formnovalidate>Cancel</button>
+            </div>
+        </form>
+    </dialog>
 
     <dialog id="options" class="options">
         <form method="dialog">
