@@ -554,6 +554,21 @@ canvas {
         }
     }
 
+    label.similar {
+        padding: 0 0 8px;
+        font-size: 16px;
+    }
+
+    .first-only .route:not(:first-child, .usual) {
+        display: none;
+    }
+
+    /* With one route a row, the rows sit side by side and wrap */
+    .first-only ul {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
     #throw-total {
         margin: 12px 0 0;
         padding-top: 12px;

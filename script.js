@@ -1095,6 +1095,13 @@ const thrownText = document.getElementById('thrown-darts');
 const throwUndo = document.getElementById('throw-undo');
 const throwStatus = document.getElementById('throw-status');
 const throwTotal = document.getElementById('throw-total');
+
+// Checked, each row of routes that score the same shows only its first,
+// plainest route (and the chart's, if it's further along)
+const hideSimilar = document.getElementById('hide-similar');
+hideSimilar.addEventListener('change', () => {
+    routesList.classList.toggle('first-only', hideSimilar.checked);
+});
 const dartKeys = document.getElementById('dart-keys');
 const multiplierButtons = [...document.querySelectorAll('#throw [data-multiplier]')];
 
