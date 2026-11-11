@@ -1094,6 +1094,7 @@ const routesList = document.getElementById('routes-list');
 const thrownText = document.getElementById('thrown-darts');
 const throwUndo = document.getElementById('throw-undo');
 const throwStatus = document.getElementById('throw-status');
+const throwTotal = document.getElementById('throw-total');
 const dartKeys = document.getElementById('dart-keys');
 const multiplierButtons = [...document.querySelectorAll('#throw [data-multiplier]')];
 
@@ -1148,6 +1149,7 @@ function attemptState() {
     const last = attempt.thrown.at(-1);
     const onDouble = FINISHING_DOUBLES.some(([label]) => label === last);
     return {
+        total,
         left,
         darts: 3 - attempt.thrown.length,
         checkedOut: left === 0 && onDouble,
@@ -1157,7 +1159,7 @@ function attemptState() {
 
 // Shows the darts thrown and the checkouts still open with the darts left
 function showAttempt() {
-    const { left, darts, checkedOut, bust } = attemptState();
+    const { total, left, darts, checkedOut, bust } = attemptState();
     const thrown = attempt.thrown.length;
     routesTitle.textContent = thrown && !bust ? `${attempt.score} → ${left} left` : attempt.score;
     thrownText.textContent = thrown ? attempt.thrown.join(' ') : '–';
@@ -1175,6 +1177,10 @@ function showAttempt() {
     throwStatus.className = checkedOut ? 'done' : bust ? 'bust' : '';
 
     showRouteList(finished ? 0 : left, finished ? 0 : darts, usual);
+
+    // The visit's score once all three darts are in
+    throwTotal.hidden = darts > 0;
+    throwTotal.textContent = `Total: ${total}`;
 }
 
 // One section per number of darts up to `maxDarts`, each with a row per

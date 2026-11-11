@@ -554,6 +554,15 @@ canvas {
         }
     }
 
+    #throw-total {
+        margin: 12px 0 0;
+        padding-top: 12px;
+        border-top: 1px solid #DDD;
+        font-size: 24px;
+        font-weight: bold;
+        text-align: center;
+    }
+
     #routes-list {
         flex: 0 1 auto;
         min-height: 0;
