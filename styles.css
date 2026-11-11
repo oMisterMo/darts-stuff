@@ -305,6 +305,113 @@ canvas {
     }
 }
 
+/* Checkouts: the chart of the usual finish for each score */
+#chart-search {
+    /* Stays in view while scrolling the chart */
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    border: 2px solid #CCC;
+    border-radius: 8px;
+    background-color: white;
+    font: inherit;
+    font-size: 18px;
+
+    &:focus {
+        border-color: #4CAF50;
+        outline: none;
+    }
+}
+
+#chart-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 6px;
+    margin: 0 0 30px;
+    padding: 0;
+    list-style: none;
+    text-align: left;
+
+    /* Each checkout opens the other ways to finish on its score */
+    button {
+        display: flex;
+        gap: 12px;
+        width: 100%;
+        padding: 6px 10px;
+        border: none;
+        border-radius: 6px;
+        background-color: #F2F2F2;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    button:hover {
+        background-color: #E2E2E2;
+    }
+
+    .score {
+        min-width: 2.5em;
+        font-weight: bold;
+        text-align: right;
+    }
+}
+
+/* The other ways to check out on a score from the chart */
+#routes {
+    width: min(800px, calc(100% - 40px));
+
+    #routes-usual {
+        color: #00873E;
+        font-weight: bold;
+    }
+
+    #routes-list {
+        max-height: 60vh;
+        margin-bottom: 16px;
+        overflow-y: auto;
+    }
+
+    h3 {
+        margin: 14px 0 6px;
+        font-size: 16px;
+    }
+
+    ul {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    /* A row of routes that score the same with each dart */
+    li {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .route {
+        padding: 4px 8px;
+        border-radius: 6px;
+        background-color: #1A1A1A;
+        color: white;
+        font-weight: bold;
+        white-space: nowrap;
+    }
+
+    .route.usual {
+        background-color: #00873E;
+    }
+}
+
 #number-pad {
     width: 100%;
     max-width: 480px;

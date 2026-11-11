@@ -432,6 +432,7 @@ const WRONG_DELAY_PER_DART = 600;
 const homeScreen = document.getElementById('home');
 const gameScreen = document.getElementById('game');
 const resultsScreen = document.getElementById('results');
+const chartScreen = document.getElementById('chart');
 const optionsDialog = document.getElementById('options');
 const optionsForm = optionsDialog.querySelector('form');
 const optionsTitle = document.getElementById('options-title');
@@ -458,7 +459,7 @@ let animationFrame = 0;
 let chosenDarts = 1;
 
 function showScreen(screen) {
-    [homeScreen, gameScreen, resultsScreen].forEach(s => { s.hidden = s !== screen; });
+    [homeScreen, gameScreen, resultsScreen, chartScreen].forEach(s => { s.hidden = s !== screen; });
 }
 
 // The game screen shows the board and tally for the drill, or the
@@ -1009,6 +1010,138 @@ function showMatchResults(winner) {
     match = null;
     showScreen(resultsScreen);
 }
+
+// ---- Checkout chart ----
+
+// The Checkouts button shows the DOUBLE_OUT_CHECKOUTS chart, 170 first
+const chartList = document.getElementById('chart-list');
+const chartSearch = document.getElementById('chart-search');
+const chartEmpty = document.getElementById('chart-empty');
+
+const chartRows = Object.entries(DOUBLE_OUT_CHECKOUTS)
+    .sort(([a], [b]) => b - a)
+    .map(([score, route]) => {
+        const item = element('li', '', '');
+        const button = element('button', '', '');
+        button.append(element('span', 'score', score), element('span', 'route', route.join(' ')));
+        button.addEventListener('click', () => showRoutes(Number(score)));
+        item.append(button);
+        return { item, score, darts: route.map(dart => dart.toLowerCase()) };
+    });
+chartList.replaceChildren(...chartRows.map(row => row.item));
+
+// Every word of the search has to match: a number matches the start of the
+// score ("12" finds 12 and 120 to 129), anything else the start of a dart
+// in the route ("d16", "t1", "bull").
+function rowMatches(row, terms) {
+    return terms.every(term => (/^[0-9]+$/.test(term)
+        ? row.score.startsWith(term)
+        : row.darts.some(dart => dart.startsWith(term))));
+}
+
+function filterChart() {
+    const terms = chartSearch.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0;
+    chartRows.forEach(row => {
+        row.item.hidden = !rowMatches(row, terms);
+        if (!row.item.hidden) shown++;
+    });
+    chartEmpty.hidden = shown > 0;
+}
+chartSearch.addEventListener('input', filterChart);
+
+document.getElementById('checkouts-button').addEventListener('click', () => {
+    chartSearch.value = '';
+    filterChart();
+    showScreen(chartScreen);
+    window.scrollTo(0, 0);
+});
+// Every double-out route for `score` in exactly `darts` darts, as lists of
+// labels. The darts before the double are in LABELLED_DARTS order (highest
+// first) and their order doesn't count, so T20 T19 D12 and T19 T20 D12 are
+// one route.
+const FINISHING_DOUBLES = LABELLED_DARTS.filter(([label]) => label === 'Bull' || label[0] === 'D');
+
+function routesIn(score, darts, from = 0) {
+    if (darts === 1) {
+        const last = FINISHING_DOUBLES.find(([, value]) => value === score);
+        return last ? [[last[0]]] : [];
+    }
+    return LABELLED_DARTS.slice(from).flatMap(([label, value], i) => (value < score
+        ? routesIn(score - value, darts - 1, from + i).map(rest => [label, ...rest])
+        : []));
+}
+
+const routesDialog = document.getElementById('routes');
+const routesTitle = document.getElementById('routes-title');
+const routesUsual = document.getElementById('routes-usual');
+const routesList = document.getElementById('routes-list');
+
+const DART_VALUES = new Map(LABELLED_DARTS);
+
+// Darts scoring the same, highest first with the double last, e.g.
+// "60 3 50" for both T20 T1 Bull and T20 3 Bull
+function routeKey(route) {
+    const values = route.map(label => DART_VALUES.get(label));
+    const last = values.pop();
+    return [...values.sort((a, b) => b - a), last].join(' ');
+}
+
+// Groups routes that score the same with each dart, such as T20 3 Bull and
+// T20 T1 Bull, the plainest beds first
+function groupRoutes(routes) {
+    const groups = new Map();
+    routes.forEach(route => {
+        const key = routeKey(route);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(route);
+    });
+    const plainness = route => route.reduce((sum, label) => sum + bedRank([label]), 0);
+    return [...groups.values()].map(group => group.sort((a, b) => plainness(a) - plainness(b)));
+}
+
+// The darts before the double in LABELLED_DARTS order, as routesIn lists them
+function inRouteOrder(route) {
+    const index = label => LABELLED_DARTS.findIndex(([l]) => l === label);
+    const setup = route.slice(0, -1).sort((a, b) => index(a) - index(b));
+    return [...setup, route.at(-1)];
+}
+
+// Opens a dialog with every way to check out on `score`, in 1, 2 and 3
+// darts, one row per group of routes that score the same with each dart,
+// with the chart's route highlighted
+function showRoutes(score) {
+    const usual = DOUBLE_OUT_CHECKOUTS[score];
+    const usualText = inRouteOrder(usual).join(' ');
+    routesTitle.textContent = score;
+    routesUsual.textContent = `Chart: ${usual.join(' ')}`;
+    routesList.replaceChildren(...[1, 2, 3].map(darts => {
+        // Biggest double first (Bull, D20, D19 ...), routesIn's order otherwise
+        const doubleRank = route => FINISHING_DOUBLES.findIndex(([label]) => label === route.at(-1));
+        const groups = groupRoutes(routesIn(score, darts).sort((x, y) => doubleRank(x) - doubleRank(y)));
+        const section = element('section', '', '');
+        const name = darts === 1 ? '1 dart' : `${darts} darts`;
+        const count = groups.length === 1 ? '1 way' : `${groups.length || 'No'} ways`;
+        section.append(element('h3', '', `${name} · ${count}`));
+        if (groups.length) {
+            const list = element('ul', '', '');
+            list.append(...groups.map(group => {
+                const row = element('li', '', '');
+                row.append(...group.map(route => {
+                    const text = route.join(' ');
+                    return element('span', text === usualText ? 'route usual' : 'route', text);
+                }));
+                return row;
+            }));
+            section.append(list);
+        }
+        return section;
+    }));
+    routesDialog.showModal();
+    routesList.scrollTop = 0;
+}
+
+document.getElementById('chart-back').addEventListener('click', () => showScreen(homeScreen));
 
 // Matches the canvas to the size it is shown at, so it fills the full width
 // and stays sharp on high-DPI screens. Drawing and scoreAt both work in CSS

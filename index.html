@@ -15,6 +15,7 @@
         <p>Practise adding up the darts on the board.</p>
         <div class="modes">
             <button id="addition-button">Addition</button>
+            <button id="checkouts-button">Checkouts</button>
         </div>
         <h2>Play on your board</h2>
         <p>Keep score of a game on a real dartboard.</p>
@@ -125,6 +126,29 @@
             </div>
         </div>
     </div>
+
+    <main id="chart" class="screen" hidden>
+        <h1>Checkouts</h1>
+        <p>The usual double-out finish for every score from 170 down.</p>
+        <input id="chart-search" type="search" placeholder="Search, e.g. 121 or D16"
+               aria-label="Search checkouts" autocomplete="off">
+        <ol id="chart-list"></ol>
+        <p id="chart-empty" hidden>No checkouts match.</p>
+        <div class="actions">
+            <button id="chart-back">Menu</button>
+        </div>
+    </main>
+
+    <dialog id="routes" class="options">
+        <form method="dialog">
+            <h2 id="routes-title">121</h2>
+            <p id="routes-usual"></p>
+            <div id="routes-list"></div>
+            <div class="actions">
+                <button value="close">Close</button>
+            </div>
+        </form>
+    </dialog>
 
     <main id="results" class="screen" hidden>
         <h1>Done</h1>
