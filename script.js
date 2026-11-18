@@ -1174,6 +1174,22 @@ const teamInputs = ['Home', 'Away'].map((side, team) => {
     return { side, name, players };
 });
 
+// Between the two teams: swaps their names and players, so the away team
+// becomes the home team
+const swapButton = element('button', 'swap', '⇄');
+swapButton.type = 'button';
+swapButton.title = 'Swap home and away';
+swapButton.setAttribute('aria-label', 'Swap home and away');
+swapButton.addEventListener('click', () => {
+    const [home, away] = teamInputs;
+    [home.name, ...home.players].forEach((input, i) => {
+        const other = [away.name, ...away.players][i];
+        [input.value, other.value] = [other.value, input.value];
+        [input, other].forEach(field => field.setCustomValidity(''));
+    });
+});
+teamFields.insertBefore(swapButton, teamFields.lastElementChild);
+
 function showTeamDialog() {
     const { teams } = loadSaved(TEAMS_STORAGE_KEY, { teams: [] });
     teamInputs.forEach(({ side, name, players }, team) => {
