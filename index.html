@@ -17,11 +17,12 @@
             <button id="addition-button">Addition</button>
             <button id="checkouts-button">Checkouts</button>
         </div>
-        <h2>Play on your board</h2>
+        <h2>Match</h2>
         <p>Keep score of a game on a real dartboard.</p>
         <div class="modes">
             <button data-start="301">301</button>
             <button data-start="501">501</button>
+            <button id="team-game-button">Game</button>
         </div>
     </main>
 
@@ -93,6 +94,30 @@
             </div>
         </form>
     </dialog>
+
+    <dialog id="team-game" class="options">
+        <form method="dialog">
+            <h2>Game</h2>
+            <p>Two teams of 8. The sides are drawn at random each round: 2 fours
+                matches at 701, 4 pairs at 601 and 8 singles at 501, all double out.</p>
+            <div id="team-fields"></div>
+            <div class="actions">
+                <button value="cancel" formnovalidate>Cancel</button>
+                <button value="ok" class="primary">Draw</button>
+            </div>
+        </form>
+    </dialog>
+
+    <main id="fixtures" class="screen" hidden>
+        <h1>Game</h1>
+        <p id="fixtures-score"></p>
+        <div id="fixtures-list"></div>
+        <div class="actions">
+            <button id="fixtures-menu">Menu</button>
+            <button id="fixtures-new">New game</button>
+            <button id="fixtures-next" class="primary">Play next</button>
+        </div>
+    </main>
 
     <div id="game" class="container screen" hidden>
         <header id="game-bar">

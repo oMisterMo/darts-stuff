@@ -435,6 +435,7 @@ const homeScreen = document.getElementById('home');
 const gameScreen = document.getElementById('game');
 const resultsScreen = document.getElementById('results');
 const chartScreen = document.getElementById('chart');
+const fixturesScreen = document.getElementById('fixtures');
 const optionsDialog = document.getElementById('options');
 const optionsForm = optionsDialog.querySelector('form');
 const optionsTitle = document.getElementById('options-title');
@@ -462,7 +463,7 @@ let animationFrame = 0;
 let chosenDarts = 1;
 
 function showScreen(screen) {
-    [homeScreen, gameScreen, resultsScreen, chartScreen].forEach(s => { s.hidden = s !== screen; });
+    [homeScreen, gameScreen, resultsScreen, chartScreen, fixturesScreen].forEach(s => { s.hidden = s !== screen; });
 }
 
 // The game screen shows the board and tally for the drill, or the
@@ -691,8 +692,11 @@ function quitGame() {
     clearTimeout(nextTurnTimer);
     cancelAnimationFrame(animationFrame);
     game = null;
+    // Leaving a team game's match goes back to its fixtures, unplayed
+    const inTeamGame = Boolean(match?.sides);
     match = null;
-    showScreen(homeScreen);
+    if (inTeamGame) showFixtures();
+    else showScreen(homeScreen);
 }
 
 document.getElementById('quit').addEventListener('click', quitGame);
@@ -846,11 +850,13 @@ matchForm.addEventListener('submit', event => {
 
 // `starter` is the player who throws first. Play again passes it on to the
 // next player, as players take turns to start legs.
-function startMatch({ start, players, doubleOut, starter = 0 }) {
+// In a team game each "player" is a side: `sides` holds the names throwing
+// for each, in turn, `fixture` the index of the match in teamGame.fixtures.
+function startMatch({ start, players, doubleOut, starter = 0, sides = null, fixture = null }) {
     replay = () => startMatch({ start, players, doubleOut, starter: (starter + 1) % players });
     game = null;
     // Everything else is worked out from the visits, so undo just drops the last one
-    match = { start, players, doubleOut, starter, visits: [] };
+    match = { start, players, doubleOut, starter, sides, fixture, visits: [] };
     padEntry = '';
     setPadEnabled(true);
     showGameScreen(true);
@@ -892,6 +898,7 @@ function winsText(wins) {
 }
 
 function playerName(player) {
+    if (match?.sides) return teamGame.teams[player].name;
     return loadNames()[player] || `Player ${player + 1}`;
 }
 
@@ -933,6 +940,13 @@ function editName(player, button) {
 
 function currentPlayer() {
     return (match.starter + match.visits.length) % match.players;
+}
+
+// Who throws next for a side in a team game: its players take turns
+function thrower(side) {
+    const names = match.sides[side];
+    const visits = match.visits.filter(visit => visit.player === side).length;
+    return names[visits % names.length];
 }
 
 function playerStats(player) {
@@ -988,6 +1002,8 @@ function element(tag, className, text) {
 }
 
 function nameButton(player) {
+    // Team names are set when the game is drawn
+    if (match.sides) return element('div', 'name', playerName(player));
     const button = element('button', 'name', playerName(player));
     button.title = 'Change name';
     button.addEventListener('click', () => editName(player, button));
@@ -1006,7 +1022,16 @@ function showMatch() {
             element('div', 'remaining', stats.remaining),
             element('div', 'stats', `Avg ${average(stats)} · Last ${last}`)
         );
-        if (match.players > 1) {
+        // A side's players, the next to throw picked out
+        if (match.sides && match.sides[player].length > 1) {
+            const next = thrower(player);
+            const names = element('div', 'throwers', '');
+            names.append(...match.sides[player].map(name => element('span', name === next ? 'next' : '', name)));
+            summary.append(names);
+        } else if (match.sides) {
+            summary.append(element('div', 'throwers', match.sides[player][0]));
+        }
+        if (match.players > 1 && !match.sides) {
             summary.append(element('div', 'wins', winsText(loadWins(match.start)[playerName(player)] ?? 0)));
         }
         // On a finish, the usual checkout runs down the left of the card.
@@ -1029,14 +1054,22 @@ function showMatch() {
     }));
 
     const visit = Math.floor(match.visits.length / match.players) + 1;
-    progressText.textContent = match.players === 1
-        ? `${match.start} · Visit ${visit}`
-        : `${match.start} · ${playerName(current)} to throw`;
+    progressText.textContent = match.sides
+        ? `${match.start} · ${thrower(current)} to throw`
+        : match.players === 1
+            ? `${match.start} · Visit ${visit}`
+            : `${match.start} · ${playerName(current)} to throw`;
     undoButton.disabled = match.visits.length === 0;
     showPadEntry();
 }
 
 function showMatchResults(winner) {
+    if (match.sides) {
+        finishFixture(match.fixture, winner, playerStats(1 - winner).remaining);
+        match = null;
+        showFixtures();
+        return;
+    }
     const stats = Array.from({ length: match.players }, (_, player) => playerStats(player));
     resultsScore.textContent = match.players === 1
         ? `Checked out in ${stats[0].darts} darts`
@@ -1083,6 +1116,200 @@ document.getElementById('wins-reset').addEventListener('click', () => {
     if (!confirm(`Reset everyone's ${winsStart} wins to 0?`)) return;
     saveWins(winsStart, {});
     showWins(winsStart, winsNames);
+});
+
+// ---- Team game ----
+
+// Two teams of 8. Each round the sides are drawn at random: 2 fours at 701,
+// 4 pairs at 601 and 8 singles at 501, every match one leg, double out.
+// A side's players take turns to throw. Each match won is a point.
+const TEAM_SIZE = 8;
+const TEAM_ROUNDS = [
+    { name: 'Fours', start: 701, size: 4 },
+    { name: 'Pairs', start: 601, size: 2 },
+    { name: 'Singles', start: 501, size: 1 }
+];
+// The last names entered, to fill the dialog next time
+const TEAMS_STORAGE_KEY = 'darts-team-names';
+// The game in progress, kept so a reload doesn't lose the night's results
+const TEAM_GAME_STORAGE_KEY = 'darts-team-game';
+
+const teamDialog = document.getElementById('team-game');
+const teamForm = teamDialog.querySelector('form');
+const teamFields = document.getElementById('team-fields');
+const fixturesScore = document.getElementById('fixtures-score');
+const fixturesList = document.getElementById('fixtures-list');
+const fixturesNext = document.getElementById('fixtures-next');
+
+// { teams: [{ name, players }], fixtures: [{ round, start, sides, winner, left }] },
+// or null. `winner` is 0 or 1 once played, `left` the loser's score left.
+const savedTeamGame = loadSaved(TEAM_GAME_STORAGE_KEY, {});
+let teamGame = Array.isArray(savedTeamGame.fixtures) ? savedTeamGame : null;
+
+function saveTeamGame() {
+    save(TEAM_GAME_STORAGE_KEY, teamGame);
+}
+
+// A field for each team's name and its 8 players
+const teamInputs = ['Home', 'Away'].map((side, team) => {
+    const fieldset = element('fieldset', 'team', '');
+    const name = document.createElement('input');
+    name.required = true;
+    name.maxLength = 20;
+    name.className = 'team-name';
+    name.setAttribute('aria-label', `${side} team name`);
+    name.placeholder = `${side} team`;
+    const legend = element('legend', '', '');
+    legend.append(name);
+    const players = Array.from({ length: TEAM_SIZE }, (_, i) => {
+        const input = document.createElement('input');
+        input.required = true;
+        input.maxLength = 20;
+        input.placeholder = `Player ${i + 1}`;
+        input.setAttribute('aria-label', `${side} player ${i + 1}`);
+        return input;
+    });
+    fieldset.append(legend, ...players);
+    teamFields.append(fieldset);
+    return { side, name, players };
+});
+
+function showTeamDialog() {
+    const { teams } = loadSaved(TEAMS_STORAGE_KEY, { teams: [] });
+    teamInputs.forEach(({ side, name, players }, team) => {
+        const saved = Array.isArray(teams) ? teams[team] : null;
+        name.value = saved?.name ?? side;
+        players.forEach((input, i) => { input.value = saved?.players?.[i] ?? ''; });
+    });
+    teamDialog.showModal();
+}
+
+function shuffled(items) {
+    const copy = [...items];
+    for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+}
+
+// Every match of the game, with each team's players shuffled afresh for
+// each round and split into sides of the round's size
+function drawFixtures(teams) {
+    return TEAM_ROUNDS.flatMap((round, roundIndex) => {
+        const [home, away] = teams.map(team => shuffled(team.players));
+        return Array.from({ length: TEAM_SIZE / round.size }, (_, i) => ({
+            round: roundIndex,
+            start: round.start,
+            sides: [home, away].map(players => players.slice(i * round.size, (i + 1) * round.size)),
+            winner: null,
+            left: null
+        }));
+    });
+}
+
+teamForm.addEventListener('submit', event => {
+    if (event.submitter?.value !== 'ok') return;
+    const teams = teamInputs.map(({ name, players }) => ({
+        name: name.value.trim(),
+        players: players.map(input => input.value.trim())
+    }));
+    save(TEAMS_STORAGE_KEY, { teams });
+    teamGame = { teams, fixtures: drawFixtures(teams) };
+    saveTeamGame();
+    showFixtures();
+});
+
+// Blank names (just spaces) would pass `required`, so they're caught here
+teamForm.addEventListener('input', event => {
+    const input = event.target;
+    input.setCustomValidity(input.value.trim() ? '' : 'Enter a name');
+});
+
+function teamScore() {
+    return [0, 1].map(team => teamGame.fixtures.filter(f => f.winner === team).length);
+}
+
+function playFixture(index) {
+    const fixture = teamGame.fixtures[index];
+    // The teams take turns to throw first
+    startMatch({ start: fixture.start, players: 2, doubleOut: true, starter: index % 2, sides: fixture.sides, fixture: index });
+}
+
+function finishFixture(index, winner, left) {
+    Object.assign(teamGame.fixtures[index], { winner, left });
+    saveTeamGame();
+}
+
+// The score so far and every match, round by round. Unplayed matches can
+// be played in any order; Play next takes the first.
+function showFixtures() {
+    const [home, away] = teamGame.teams;
+    const score = teamScore();
+    const next = teamGame.fixtures.findIndex(f => f.winner === null);
+    if (next === -1) {
+        fixturesScore.textContent = score[0] === score[1]
+            ? `Draw, ${score[0]}–${score[1]}`
+            : `${teamGame.teams[score[0] > score[1] ? 0 : 1].name} win ${Math.max(...score)}–${Math.min(...score)}`;
+    } else {
+        fixturesScore.textContent = `${home.name} ${score[0]}–${score[1]} ${away.name}`;
+    }
+    fixturesScore.className = next === -1 ? 'final' : '';
+
+    fixturesList.replaceChildren(...TEAM_ROUNDS.map((round, roundIndex) => {
+        const section = element('section', '', '');
+        section.append(element('h2', '', `${round.name} · ${round.start}`));
+        const list = element('ol', '', '');
+        teamGame.fixtures.forEach((fixture, index) => {
+            if (fixture.round !== roundIndex) return;
+            const played = fixture.winner !== null;
+            const row = element(played ? 'div' : 'button', 'fixture', '');
+            const side = team => {
+                const cell = element('span', fixture.winner === team ? 'side won' : 'side', '');
+                cell.append(...fixture.sides[team].map(name => element('span', '', name)));
+                return cell;
+            };
+            const result = element('span', 'result', played ? `${fixture.left} left` : 'v');
+            if (played) result.title = `${teamGame.teams[1 - fixture.winner].name} had ${fixture.left} left`;
+            row.append(side(0), result, side(1));
+            if (!played) {
+                row.type = 'button';
+                row.title = 'Play this match';
+                row.addEventListener('click', () => playFixture(index));
+            }
+            const item = element('li', '', '');
+            item.append(row);
+            list.append(item);
+        });
+        section.append(list);
+        return section;
+    }));
+
+    fixturesNext.hidden = next === -1;
+    fixturesNext.onclick = () => playFixture(next);
+    showScreen(fixturesScreen);
+    window.scrollTo(0, 0);
+}
+
+// Carries on with a game in progress, or starts a new one
+document.getElementById('team-game-button').addEventListener('click', () => {
+    if (teamGame) showFixtures();
+    else showTeamDialog();
+});
+
+document.getElementById('fixtures-menu').addEventListener('click', () => {
+    // A finished game is done with; one in progress waits for the Game button
+    if (teamGame && teamGame.fixtures.every(f => f.winner !== null)) {
+        teamGame = null;
+        save(TEAM_GAME_STORAGE_KEY, null);
+    }
+    showScreen(homeScreen);
+});
+
+document.getElementById('fixtures-new').addEventListener('click', () => {
+    const unfinished = teamGame.fixtures.some(f => f.winner !== null) && teamGame.fixtures.some(f => f.winner === null);
+    if (unfinished && !confirm('Start a new game? The results so far will be lost.')) return;
+    showTeamDialog();
 });
 
 // ---- Checkout chart ----
