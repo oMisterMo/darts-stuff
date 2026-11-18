@@ -447,6 +447,7 @@ const boardArea = document.getElementById('board');
 const scoreboard = document.getElementById('scoreboard');
 const resultsScore = document.getElementById('results-score');
 const resultsList = document.getElementById('results-misses');
+const resultsWins = document.getElementById('results-wins');
 
 // The game in progress, or null on the home and results screens.
 // `waiting` is true while the player can type an answer.
@@ -675,6 +676,7 @@ function checkAnswer(answer) {
 }
 
 function showResults() {
+    resultsWins.hidden = true;
     resultsScore.textContent = `${game.correct} / ${game.count} correct`;
     resultsList.replaceChildren(...game.misses.map(miss => {
         const item = document.createElement('li');
@@ -864,6 +866,31 @@ function loadNames() {
     return Array.isArray(names) ? names.map(name => (typeof name === 'string' ? name : '')) : [];
 }
 
+// Games won by each player name, kept separately for 301 and 501, as
+// { 301: { name: wins }, 501: { name: wins } }. Only games with two or
+// more players count. Wins go by name, so they follow a player whichever
+// seat they're in.
+const WINS_STORAGE_KEY = 'darts-match-wins';
+
+function loadWins(start) {
+    const tally = loadSaved(WINS_STORAGE_KEY, {})[start];
+    return tally && typeof tally === 'object' ? tally : {};
+}
+
+function saveWins(start, tally) {
+    save(WINS_STORAGE_KEY, { ...loadSaved(WINS_STORAGE_KEY, {}), [start]: tally });
+}
+
+function recordWin(start, name) {
+    const tally = loadWins(start);
+    tally[name] = (tally[name] ?? 0) + 1;
+    saveWins(start, tally);
+}
+
+function winsText(wins) {
+    return wins === 1 ? '1 win' : `${wins} wins`;
+}
+
 function playerName(player) {
     return loadNames()[player] || `Player ${player + 1}`;
 }
@@ -979,6 +1006,9 @@ function showMatch() {
             element('div', 'remaining', stats.remaining),
             element('div', 'stats', `Avg ${average(stats)} · Last ${last}`)
         );
+        if (match.players > 1) {
+            summary.append(element('div', 'wins', winsText(loadWins(match.start)[playerName(player)] ?? 0)));
+        }
         // On a finish, the usual checkout runs down the left of the card.
         // With double out, clicking it opens the checkout dialog for the
         // score, which works out double-out routes.
@@ -1016,9 +1046,44 @@ function showMatchResults(winner) {
         const name = match.players === 1 ? '' : `${playerName(player)}: `;
         return element('li', '', `${name}${average(s)} average, ${s.darts} darts${left}`);
     }));
+    resultsWins.hidden = match.players === 1;
+    if (match.players > 1) {
+        recordWin(match.start, playerName(winner));
+        const names = Array.from({ length: match.players }, (_, player) => playerName(player));
+        showWins(match.start, names);
+    }
     match = null;
     showScreen(resultsScreen);
 }
+
+// The win tally for `start` on the results screen, most wins first, with
+// the leaders (more than one on a tie) picked out. `names`, the players in
+// the game just played, are listed even without a win.
+const winsTitle = document.getElementById('wins-title');
+const winsList = document.getElementById('wins-list');
+let winsStart = 501;
+let winsNames = [];
+
+function showWins(start, names) {
+    winsStart = start;
+    winsNames = names;
+    const tally = loadWins(start);
+    names.forEach(name => { tally[name] ??= 0; });
+    const ranked = Object.entries(tally).sort(([, a], [, b]) => b - a);
+    const most = ranked[0]?.[1] ?? 0;
+    winsTitle.textContent = `${start} wins`;
+    winsList.replaceChildren(...ranked.map(([name, wins]) => {
+        const item = element('li', wins === most ? 'leader' : '', '');
+        item.append(element('span', 'name', name), element('span', 'count', winsText(wins)));
+        return item;
+    }));
+}
+
+document.getElementById('wins-reset').addEventListener('click', () => {
+    if (!confirm(`Reset everyone's ${winsStart} wins to 0?`)) return;
+    saveWins(winsStart, {});
+    showWins(winsStart, winsNames);
+});
 
 // ---- Checkout chart ----
 
@@ -1032,10 +1097,11 @@ const chartRows = Object.entries(DOUBLE_OUT_CHECKOUTS)
     .map(([score, route]) => {
         const item = element('li', '', '');
         const button = element('button', '', '');
-        button.append(element('span', 'score', score), element('span', 'route', route.join(' ')));
+        const record = element('span', 'record', '');
+        button.append(element('span', 'score', score), element('span', 'route', route.join(' ')), record);
         button.addEventListener('click', () => showRoutes(Number(score)));
         item.append(button);
-        return { item, score, darts: route.map(dart => dart.toLowerCase()) };
+        return { item, score, record, darts: route.map(dart => dart.toLowerCase()) };
     });
 chartList.replaceChildren(...chartRows.map(row => row.item));
 
@@ -1068,6 +1134,7 @@ chartSearch.addEventListener('input', () => {
 document.getElementById('checkouts-button').addEventListener('click', () => {
     chartSearch.value = '';
     filterChart();
+    showChartRecords();
     showScreen(chartScreen);
     window.scrollTo(0, 0);
 });
@@ -1105,8 +1172,9 @@ hideSimilar.addEventListener('change', () => {
 const dartKeys = document.getElementById('dart-keys');
 const multiplierButtons = [...document.querySelectorAll('#throw [data-multiplier]')];
 
-// The dialog's score and the darts thrown at it so far, as labels
-const attempt = { score: 0, thrown: [] };
+// The dialog's score and the darts thrown at it so far, as labels.
+// `recorded` is the attempt's entry in the history once it's finished.
+const attempt = { score: 0, thrown: [], recorded: null };
 let multiplier = 1;
 
 const DART_VALUES = new Map(LABELLED_DARTS);
@@ -1143,6 +1211,7 @@ function inRouteOrder(route) {
 function showRoutes(score) {
     attempt.score = score;
     attempt.thrown = [];
+    attempt.recorded = null;
     setMultiplier(1);
     showAttempt();
     routesDialog.showModal();
@@ -1179,11 +1248,12 @@ function showAttempt() {
     if (checkedOut) throwStatus.textContent = 'Checked out!';
     else if (bust) throwStatus.textContent = `Bust, back to ${attempt.score}`;
     else if (darts === 0) throwStatus.textContent = `No darts left, ${left} to go`;
-    else if (!thrown) throwStatus.textContent = 'Tap what each dart hits';
+    else if (!thrown) throwStatus.textContent = `Tap what each dart hits${recordText(attempt.score, ' · ')}`;
     else throwStatus.textContent = `${left} with ${darts === 1 ? '1 dart' : `${darts} darts`} left`;
     throwStatus.className = checkedOut ? 'done' : bust ? 'bust' : '';
 
-    showRouteList(finished ? 0 : left, finished ? 0 : darts, usual);
+    if (finished) showHistory(attempt.score);
+    else showRouteList(left, darts, usual);
 
     // The visit's score once all three darts are in
     throwTotal.hidden = darts > 0;
@@ -1236,7 +1306,138 @@ function throwDart(label) {
     attempt.thrown.push(label);
     // Back to single after each dart, as most darts are
     setMultiplier(1);
+    recordAttempt();
     showAttempt();
+}
+
+// ---- Checkout history ----
+
+// Every finished attempt in the checkout dialog, oldest first, as
+// { score, darts, result, at }: result is 'out', 'bust' or 'short' (three
+// darts in without finishing), `at` the time in ms. Saved under
+// `darts-checkout-history`, shared by the chart and the 301/501 scoreboard.
+const HISTORY_KEY = 'darts-checkout-history';
+const HISTORY_LIMIT = 1000;
+
+function loadHistory() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(HISTORY_KEY));
+        if (Array.isArray(saved)) return saved;
+    } catch {
+        // Storage blocked or the saved value is broken, start afresh
+    }
+    return [];
+}
+
+let attemptHistory = loadHistory();
+
+function saveHistory() {
+    attemptHistory = attemptHistory.slice(-HISTORY_LIMIT);
+    save(HISTORY_KEY, attemptHistory);
+    showChartRecords();
+}
+
+// Adds the attempt to the history once it's checked out, gone bust or used
+// its three darts
+function recordAttempt() {
+    const { darts, checkedOut, bust } = attemptState();
+    if (!checkedOut && !bust && darts > 0) return;
+    attempt.recorded = {
+        score: attempt.score,
+        darts: [...attempt.thrown],
+        result: checkedOut ? 'out' : bust ? 'bust' : 'short',
+        at: Date.now()
+    };
+    attemptHistory.push(attempt.recorded);
+    saveHistory();
+}
+
+// Undoing the last dart of a finished attempt takes it back out
+function unrecordAttempt() {
+    if (!attempt.recorded) return;
+    attemptHistory = attemptHistory.filter(entry => entry !== attempt.recorded);
+    attempt.recorded = null;
+    saveHistory();
+}
+
+function attemptsAt(score) {
+    return attemptHistory.filter(entry => entry.score === score);
+}
+
+// "2/5" for 2 checkouts in 5 attempts at `score`, or '' with none
+function recordText(score, prefix = '') {
+    const attempts = attemptsAt(score);
+    if (!attempts.length) return '';
+    const out = attempts.filter(entry => entry.result === 'out').length;
+    return `${prefix}${out}/${attempts.length} checked out`;
+}
+
+function showChartRecords() {
+    const counts = new Map();
+    attemptHistory.forEach(({ score, result }) => {
+        const count = counts.get(score) ?? { out: 0, all: 0 };
+        count.all++;
+        if (result === 'out') count.out++;
+        counts.set(score, count);
+    });
+    chartRows.forEach(row => {
+        const count = counts.get(Number(row.score));
+        row.record.textContent = count ? `${count.out}/${count.all}` : '';
+        row.record.title = count ? `Checked out ${count.out} of ${count.all} attempts` : '';
+    });
+}
+
+const RESULT_TEXT = { out: 'Out', bust: 'Bust', short: 'Missed' };
+
+function formatWhen(time) {
+    return new Date(time).toLocaleString(undefined, {
+        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+    });
+}
+
+// Takes the route list's place once the attempt is finished: every attempt
+// at `score`, newest first, with the one just made at the top
+function showHistory(score) {
+    const attempts = attemptsAt(score).reverse();
+    const section = element('section', 'history', '');
+    const heading = element('h3', '', '');
+    // Another go at the same score, keeping this one in the history
+    const again = element('button', '', 'Again');
+    again.type = 'button';
+    again.id = 'throw-again';
+    again.addEventListener('click', () => {
+        attempt.thrown = [];
+        attempt.recorded = null;
+        setMultiplier(1);
+        showAttempt();
+    });
+    heading.append(element('span', '', `Your attempts at ${score} · ${recordText(score) || 'none yet'}`), again);
+    section.append(heading);
+    const list = element('ul', '', '');
+    list.append(...attempts.map(entry => {
+        const row = element('li', entry === attempt.recorded ? 'latest' : '', '');
+        row.append(
+            element('span', `result ${entry.result}`, RESULT_TEXT[entry.result] ?? entry.result),
+            element('span', 'darts', entry.darts.join(' ')),
+            element('span', 'when', formatWhen(entry.at))
+        );
+        return row;
+    }));
+    section.append(list);
+    if (attempts.length) {
+        const clear = element('button', 'clear-history', `Clear attempts at ${score}`);
+        clear.type = 'button';
+        clear.addEventListener('click', () => {
+            if (!confirm(`Forget all ${attempts.length} attempts at ${score}?`)) return;
+            attemptHistory = attemptHistory.filter(entry => entry.score !== score);
+            attempt.recorded = null;
+            saveHistory();
+            showHistory(score);
+        });
+        section.append(clear);
+    }
+    routesList.replaceChildren(section);
+    routesList.scrollTop = 0;
 }
 
 // 1 to 20 take the Single, Double or Treble picked above them. 25, Bull and
@@ -1258,6 +1459,7 @@ dartKeys.append(
 );
 
 throwUndo.addEventListener('click', () => {
+    unrecordAttempt();
     attempt.thrown.pop();
     showAttempt();
 });

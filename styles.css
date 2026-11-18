@@ -153,6 +153,61 @@ main.screen h2 {
     line-height: 1.8;
 }
 
+/* 301 and 501: games won by each player, most first */
+#results-wins {
+    width: min(320px, 100%);
+    margin: 0 auto 30px;
+
+    h2 {
+        margin: 0 0 8px;
+        font-size: 22px;
+    }
+
+    ol {
+        margin: 0 0 12px;
+        padding: 0;
+        list-style: none;
+    }
+
+    li {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 6px 12px;
+        border-radius: 6px;
+    }
+
+    li:nth-child(odd) {
+        background-color: #F2F2F2;
+    }
+
+    li.leader {
+        background-color: #E7F5E8;
+        color: #00873E;
+        font-weight: bold;
+    }
+
+    .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #wins-reset {
+        padding: 6px 12px;
+        border: none;
+        border-radius: 6px;
+        background-color: #E8E8E8;
+        font: inherit;
+        font-size: 14px;
+        cursor: pointer;
+
+        &:hover {
+            background-color: #D6D6D6;
+        }
+    }
+}
+
 #game-bar {
     display: flex;
     align-items: center;
@@ -314,6 +369,11 @@ canvas {
     .stats {
         color: #555;
     }
+
+    .wins {
+        color: #00873E;
+        font-weight: bold;
+    }
 }
 
 /* Checkouts: the chart of the usual finish for each score */
@@ -399,6 +459,13 @@ canvas {
         min-width: 2.5em;
         font-weight: bold;
         text-align: right;
+    }
+
+    /* Checkouts out of attempts at this score, from the checkout dialog */
+    .record {
+        margin-left: auto;
+        color: #00873E;
+        font-weight: bold;
     }
 }
 
@@ -617,6 +684,84 @@ canvas {
 
     .route.usual {
         background-color: #00873E;
+    }
+
+    /* Past attempts at the score, shown once an attempt is finished */
+    .history {
+        /* One attempt a line, even with .first-only on the list */
+        ul {
+            flex-direction: column;
+        }
+
+        h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #throw-again {
+            flex: none;
+            margin-left: auto;
+            padding: 6px 14px;
+            border: none;
+            border-radius: 6px;
+            background-color: #1A1A1A;
+            color: white;
+            font: inherit;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        li {
+            align-items: baseline;
+            gap: 10px;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        li.latest {
+            background-color: #F2F2F2;
+        }
+
+        .result {
+            min-width: 3.5em;
+            font-weight: bold;
+
+            &.out {
+                color: #00873E;
+            }
+
+            &.bust {
+                color: #C8102E;
+            }
+        }
+
+        .darts {
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .when {
+            margin-left: auto;
+            color: #666;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        .clear-history {
+            margin-top: 12px;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            background-color: #E8E8E8;
+            font: inherit;
+            font-size: 14px;
+            cursor: pointer;
+
+            &:hover {
+                background-color: #D6D6D6;
+            }
+        }
     }
 }
 
