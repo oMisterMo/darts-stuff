@@ -845,6 +845,8 @@ matchForm.addEventListener('submit', event => {
     if (event.submitter?.value !== 'ok') return;
     const options = readMatchOptions();
     save(matchStorageKey(matchStart), options);
+    // A new game from the menu starts the win tally afresh; Play again keeps it
+    saveWins(matchStart, {});
     startMatch({ ...options, start: matchStart });
 });
 
@@ -875,7 +877,8 @@ function loadNames() {
 // Games won by each player name, kept separately for 301 and 501, as
 // { 301: { name: wins }, 501: { name: wins } }. Only games with two or
 // more players count. Wins go by name, so they follow a player whichever
-// seat they're in.
+// seat they're in. OK in the options dialog clears the tally for that
+// game, so it only counts games played back to back with Play again.
 const WINS_STORAGE_KEY = 'darts-match-wins';
 
 function loadWins(start) {
