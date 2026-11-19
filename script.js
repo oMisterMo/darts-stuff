@@ -942,7 +942,18 @@ function editName(player, button) {
 }
 
 function currentPlayer() {
+    if (match.sides) return teamOrder()[match.visits.length % teamOrder().length];
     return (match.starter + match.visits.length) % match.players;
+}
+
+// The sides' visits in one round of a team game, as side indexes: each
+// side's first player, then each side's second, and so on. A side that's
+// short misses its missing players' goes, so in a 2v1 the pair throws twice
+// for every visit of the single player (A1 B1 A2, A1 B1 A2 ...).
+function teamOrder() {
+    const sides = [match.starter, 1 - match.starter];
+    const size = Math.max(...match.sides.map(names => names.length));
+    return Array.from({ length: size }, (_, k) => sides.filter(side => k < match.sides[side].length)).flat();
 }
 
 // Who throws next for a side in a team game: its players take turns
