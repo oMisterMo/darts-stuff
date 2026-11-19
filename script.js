@@ -1123,9 +1123,12 @@ document.getElementById('wins-reset').addEventListener('click', () => {
 
 // ---- Team game ----
 
-// Two teams of 8. Each round the sides are drawn at random: 2 fours at 701,
-// 4 pairs at 601 and 8 singles at 501, every match one leg, double out.
-// A side's players take turns to throw. Each match won is a point.
+// Two teams of 8, or more with reserves. Before each round you tick who's
+// playing (8 at most), then the sides
+// are drawn at random: 2 fours at 701, 4 pairs at 601 and 8 singles at 501,
+// every match one leg, double out. A team that's short plays 4v3 or 2v1,
+// and gives away a singles match. A side's players take turns to throw.
+// Each match won is a point.
 const TEAM_SIZE = 8;
 const TEAM_ROUNDS = [
     { name: 'Fours', start: 701, size: 4 },
@@ -1144,16 +1147,41 @@ const fixturesScore = document.getElementById('fixtures-score');
 const fixturesList = document.getElementById('fixtures-list');
 const fixturesNext = document.getElementById('fixtures-next');
 
-// { teams: [{ name, players }], fixtures: [{ round, start, sides, winner, left }] },
-// or null. `winner` is 0 or 1 once played, `left` the loser's score left.
-const savedTeamGame = loadSaved(TEAM_GAME_STORAGE_KEY, {});
+// { teams: [{ name, players }], out, fixtures: [{ round, start, sides, winner, left, walkover }] },
+// or null. Fixtures are added a round at a time as each is drawn. `out`
+// holds, for each team, the indexes of the players not playing; it carries
+// over to the next round. `winner` is 0 or 1 once played, `left` the
+// loser's score left (null for a walkover).
+const savedTeamGame = loadSaved(TEAM_GAME_STORAGE_KEY, { out: [[], []] });
 let teamGame = Array.isArray(savedTeamGame.fixtures) ? savedTeamGame : null;
 
 function saveTeamGame() {
     save(TEAM_GAME_STORAGE_KEY, teamGame);
 }
 
-// A field for each team's name and its 8 players
+// A player's name field. The first 8 must be filled in; more are reserves,
+// and left blank they're dropped.
+function playerInput(side, i) {
+    const input = document.createElement('input');
+    input.required = i < TEAM_SIZE;
+    input.maxLength = 20;
+    input.placeholder = i < TEAM_SIZE ? `Player ${i + 1}` : `Player ${i + 1} (optional)`;
+    input.setAttribute('aria-label', `${side} player ${i + 1}`);
+    return input;
+}
+
+// Adds or removes player fields at the end of a team, to have `count`
+function setPlayerCount(team, count) {
+    const { side, players, addButton } = teamInputs[team];
+    while (players.length < count) {
+        const input = playerInput(side, players.length);
+        addButton.before(input);
+        players.push(input);
+    }
+    while (players.length > count) players.pop().remove();
+}
+
+// A field for each team's name and its players, with a button for more
 const teamInputs = ['Home', 'Away'].map((side, team) => {
     const fieldset = element('fieldset', 'team', '');
     const name = document.createElement('input');
@@ -1164,17 +1192,16 @@ const teamInputs = ['Home', 'Away'].map((side, team) => {
     name.placeholder = `${side} team`;
     const legend = element('legend', '', '');
     legend.append(name);
-    const players = Array.from({ length: TEAM_SIZE }, (_, i) => {
-        const input = document.createElement('input');
-        input.required = true;
-        input.maxLength = 20;
-        input.placeholder = `Player ${i + 1}`;
-        input.setAttribute('aria-label', `${side} player ${i + 1}`);
-        return input;
+    const players = Array.from({ length: TEAM_SIZE }, (_, i) => playerInput(side, i));
+    const addButton = element('button', 'add-player', '+ Add player');
+    addButton.type = 'button';
+    addButton.addEventListener('click', () => {
+        setPlayerCount(team, players.length + 1);
+        players.at(-1).focus();
     });
-    fieldset.append(legend, ...players);
+    fieldset.append(legend, ...players, addButton);
     teamFields.append(fieldset);
-    return { side, name, players };
+    return { side, name, players, addButton };
 });
 
 // Between the two teams: swaps their names and players, so the away team
@@ -1185,6 +1212,9 @@ swapButton.title = 'Swap home and away';
 swapButton.setAttribute('aria-label', 'Swap home and away');
 swapButton.addEventListener('click', () => {
     const [home, away] = teamInputs;
+    // Both teams need as many fields as the bigger one first
+    const count = Math.max(home.players.length, away.players.length);
+    [0, 1].forEach(team => setPlayerCount(team, count));
     [home.name, ...home.players].forEach((input, i) => {
         const other = [away.name, ...away.players][i];
         [input.value, other.value] = [other.value, input.value];
@@ -1198,8 +1228,12 @@ function showTeamDialog() {
     teamInputs.forEach(({ side, name, players }, team) => {
         const saved = Array.isArray(teams) ? teams[team] : null;
         name.value = saved?.name ?? side;
+        const names = Array.isArray(saved?.players) ? saved.players : [];
+        setPlayerCount(team, Math.max(TEAM_SIZE, names.length));
         players.forEach((input, i) => { input.value = saved?.players?.[i] ?? ''; });
     });
+    // Continue goes back to a game with matches still to play
+    document.getElementById('team-continue').hidden = !teamGameUnfinished();
     teamDialog.showModal();
 }
 
@@ -1212,29 +1246,81 @@ function shuffled(items) {
     return copy;
 }
 
-// Every match of the game, with each team's players shuffled afresh for
-// each round and split into sides of the round's size
-function drawFixtures(teams) {
-    return TEAM_ROUNDS.flatMap((round, roundIndex) => {
-        const [home, away] = teams.map(team => shuffled(team.players));
-        return Array.from({ length: TEAM_SIZE / round.size }, (_, i) => ({
+// How many players each of a round's sides gets from `count` playing:
+// as even as possible, the bigger sides first, so with 7 players fours are
+// 4 and 3, and pairs 2, 2, 2 and 1. A side of 0 gives the match away.
+function sideSizes(round, count) {
+    const matches = TEAM_SIZE / round.size;
+    const base = Math.floor(count / matches);
+    return Array.from({ length: matches }, (_, i) => base + (i < count % matches ? 1 : 0));
+}
+
+// The players ticked as playing for each team
+function playing(team) {
+    return teamGame.teams[team].players.filter((_, i) => !teamGame.out[team].includes(i));
+}
+
+function roundDrawn(roundIndex) {
+    return teamGame.fixtures.some(f => f.round === roundIndex);
+}
+
+// A round's matches, with each team's players shuffled and split into
+// sides. Short sides line up against each other, since the bigger sides
+// come first for both teams. A side with no one loses by a walkover, and
+// a match neither team can field isn't played.
+function drawRound(roundIndex) {
+    const round = TEAM_ROUNDS[roundIndex];
+    const players = [0, 1].map(team => shuffled(playing(team)));
+    const sides = players.map(list => {
+        let taken = 0;
+        return sideSizes(round, list.length).map(size => list.slice(taken, taken += size));
+    });
+    sides[0].forEach((home, i) => {
+        const away = sides[1][i];
+        if (!home.length && !away.length) return;
+        const walkover = !home.length || !away.length;
+        teamGame.fixtures.push({
             round: roundIndex,
             start: round.start,
-            sides: [home, away].map(players => players.slice(i * round.size, (i + 1) * round.size)),
-            winner: null,
-            left: null
-        }));
+            sides: [home, away],
+            winner: walkover ? (home.length ? 0 : 1) : null,
+            left: null,
+            walkover
+        });
     });
+    saveTeamGame();
+    showFixtures();
+}
+
+function teamGameFinished() {
+    return TEAM_ROUNDS.every((_, r) => roundDrawn(r)) && teamGame.fixtures.every(f => f.winner !== null);
+}
+
+// A game with rounds still to draw or matches still to play
+function teamGameUnfinished() {
+    return Boolean(teamGame) && !teamGameFinished();
 }
 
 teamForm.addEventListener('submit', event => {
+    if (event.submitter?.value === 'continue') {
+        showFixtures();
+        return;
+    }
     if (event.submitter?.value !== 'ok') return;
+    // Cancelling the confirm keeps the dialog open
+    if (teamGameUnfinished() && teamGame.fixtures.some(f => f.winner !== null && !f.walkover)
+        && !confirm('Start a new game? The results so far will be lost.')) {
+        event.preventDefault();
+        return;
+    }
     const teams = teamInputs.map(({ name, players }) => ({
         name: name.value.trim(),
-        players: players.map(input => input.value.trim())
+        players: players.map(input => input.value.trim()).filter(Boolean)
     }));
     save(TEAMS_STORAGE_KEY, { teams });
-    teamGame = { teams, fixtures: drawFixtures(teams) };
+    // The first 8 are ticked as playing to start with, reserves aren't
+    const reserves = team => team.players.map((_, i) => i).filter(i => i >= TEAM_SIZE);
+    teamGame = { teams, out: teams.map(reserves), fixtures: [] };
     saveTeamGame();
     showFixtures();
 });
@@ -1242,7 +1328,8 @@ teamForm.addEventListener('submit', event => {
 // Blank names (just spaces) would pass `required`, so they're caught here
 teamForm.addEventListener('input', event => {
     const input = event.target;
-    input.setCustomValidity(input.value.trim() ? '' : 'Enter a name');
+    // Reserves can be left blank
+    input.setCustomValidity(input.value.trim() || !input.required ? '' : 'Enter a name');
 });
 
 function teamScore() {
@@ -1266,18 +1353,29 @@ function showFixtures() {
     const [home, away] = teamGame.teams;
     const score = teamScore();
     const next = teamGame.fixtures.findIndex(f => f.winner === null);
-    if (next === -1) {
+    const finished = teamGameFinished();
+    if (finished) {
         fixturesScore.textContent = score[0] === score[1]
             ? `Draw, ${score[0]}–${score[1]}`
             : `${teamGame.teams[score[0] > score[1] ? 0 : 1].name} win ${Math.max(...score)}–${Math.min(...score)}`;
     } else {
         fixturesScore.textContent = `${home.name} ${score[0]}–${score[1]} ${away.name}`;
     }
-    fixturesScore.className = next === -1 ? 'final' : '';
+    fixturesScore.className = finished ? 'final' : '';
 
+    // Rounds are drawn in order, so only the first undrawn one can be
+    const toDraw = TEAM_ROUNDS.findIndex((_, r) => !roundDrawn(r));
     fixturesList.replaceChildren(...TEAM_ROUNDS.map((round, roundIndex) => {
         const section = element('section', '', '');
         section.append(element('h2', '', `${round.name} · ${round.start}`));
+        if (roundIndex === toDraw) {
+            section.append(roundPicker(roundIndex));
+            return section;
+        }
+        if (!roundDrawn(roundIndex)) {
+            section.append(element('p', 'undrawn', 'Drawn after the round before'));
+            return section;
+        }
         const list = element('ol', '', '');
         teamGame.fixtures.forEach((fixture, index) => {
             if (fixture.round !== roundIndex) return;
@@ -1285,9 +1383,19 @@ function showFixtures() {
             const row = element(played ? 'div' : 'button', 'fixture', '');
             const side = team => {
                 const cell = element('span', fixture.winner === team ? 'side won' : 'side', '');
-                cell.append(...fixture.sides[team].map(name => element('span', '', name)));
+                const names = fixture.sides[team];
+                cell.append(...(names.length ? names : ['—']).map(name => element('span', '', name)));
                 return cell;
             };
+            if (fixture.walkover) {
+                const result = element('span', 'result', 'w/o');
+                result.title = `${teamGame.teams[1 - fixture.winner].name} had no one to play`;
+                row.append(side(0), result, side(1));
+                const item = element('li', '', '');
+                item.append(row);
+                list.append(item);
+                return;
+            }
             const result = element('span', 'result', played ? `${fixture.left} left` : 'v');
             if (played) result.title = `${teamGame.teams[1 - fixture.winner].name} had ${fixture.left} left`;
             row.append(side(0), result, side(1));
@@ -1310,26 +1418,67 @@ function showFixtures() {
     window.scrollTo(0, 0);
 }
 
-// Carries on with a game in progress, or starts a new one
-document.getElementById('team-game-button').addEventListener('click', () => {
-    if (teamGame) showFixtures();
-    else showTeamDialog();
-});
+// Ticks for who's playing in a round from each team, the matches that
+// makes, and the button to draw them. Changes are saved as they're made.
+function roundPicker(roundIndex) {
+    const round = TEAM_ROUNDS[roundIndex];
+    const picker = element('div', 'picker', '');
+    const teams = element('div', 'pick-teams', '');
+    const shape = element('p', 'shape', '');
+    const draw = element('button', 'primary draw', `Draw ${round.name.toLowerCase()}`);
+    draw.type = 'button';
+    draw.addEventListener('click', () => drawRound(roundIndex));
+
+    const update = () => {
+        const counts = [0, 1].map(team => playing(team).length);
+        const [home, away] = counts.map(count => sideSizes(round, count));
+        const matches = home.map((size, i) => [size, away[i]]).filter(([a, b]) => a || b);
+        shape.textContent = matches.map(([a, b]) => (a && b ? `${a}v${b}` : `${a}v${b} w/o`)).join(' · ');
+        draw.disabled = counts.includes(0) || counts.some(count => count > TEAM_SIZE);
+        if (counts.includes(0)) shape.textContent = 'Each team needs someone playing';
+        counts.forEach((count, team) => {
+            if (count > TEAM_SIZE) shape.textContent = `${teamGame.teams[team].name} has ${count} ticked, ${TEAM_SIZE} at most`;
+        });
+    };
+
+    teamGame.teams.forEach((team, t) => {
+        const fieldset = element('fieldset', '', '');
+        fieldset.append(element('legend', '', team.name));
+        team.players.forEach((name, i) => {
+            const label = element('label', '', '');
+            const box = document.createElement('input');
+            box.type = 'checkbox';
+            box.checked = !teamGame.out[t].includes(i);
+            box.addEventListener('change', () => {
+                teamGame.out[t] = teamGame.out[t].filter(index => index !== i);
+                if (!box.checked) teamGame.out[t].push(i);
+                saveTeamGame();
+                update();
+            });
+            label.append(box, element('span', '', name));
+            fieldset.append(label);
+        });
+        teams.append(fieldset);
+    });
+    update();
+    picker.append(teams, shape, draw);
+    return picker;
+}
+
+// Always opens the new game dialog, which can also continue a game in progress
+document.getElementById('team-game-button').addEventListener('click', showTeamDialog);
 
 document.getElementById('fixtures-menu').addEventListener('click', () => {
-    // A finished game is done with; one in progress waits for the Game button
-    if (teamGame && teamGame.fixtures.every(f => f.winner !== null)) {
+    // A finished game is done with; one in progress waits for Continue
+    if (teamGame && teamGameFinished()) {
         teamGame = null;
         save(TEAM_GAME_STORAGE_KEY, null);
     }
     showScreen(homeScreen);
 });
 
-document.getElementById('fixtures-new').addEventListener('click', () => {
-    const unfinished = teamGame.fixtures.some(f => f.winner !== null) && teamGame.fixtures.some(f => f.winner === null);
-    if (unfinished && !confirm('Start a new game? The results so far will be lost.')) return;
-    showTeamDialog();
-});
+// Draw asks before replacing a game in progress
+document.getElementById('fixtures-new').addEventListener('click', showTeamDialog);
 
 // ---- Checkout chart ----
 

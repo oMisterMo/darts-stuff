@@ -98,12 +98,15 @@
     <dialog id="team-game" class="options">
         <form method="dialog">
             <h2>Game</h2>
-            <p>Two teams of 8. The sides are drawn at random each round: 2 fours
-                matches at 701, 4 pairs at 601 and 8 singles at 501, all double out.</p>
+            <p>Two teams of 8, plus any reserves. Before each round, tick who's playing (8 at most) and the sides
+                are drawn at random: 2 fours matches at 701, 4 pairs at 601 and 8 singles
+                at 501, all double out. A team that's short plays 4v3 or 2v1, and gives
+                away a singles match.</p>
             <div id="team-fields"></div>
             <div class="actions">
                 <button value="cancel" formnovalidate>Cancel</button>
-                <button value="ok" class="primary">Draw</button>
+                <button value="continue" id="team-continue" formnovalidate hidden>Continue</button>
+                <button value="ok" class="primary">Start</button>
             </div>
         </form>
     </dialog>

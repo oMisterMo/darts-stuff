@@ -343,6 +343,20 @@ canvas {
     .team-name {
         font-weight: bold;
     }
+
+    .add-player {
+        padding: 8px 10px;
+        border: 2px dashed #CCC;
+        border-radius: 6px;
+        background: none;
+        color: #555;
+        cursor: pointer;
+
+        &:hover {
+            border-color: #999;
+            color: #1A1A1A;
+        }
+    }
 }
 
 /* Team game: the score and every match, round by round */
@@ -422,6 +436,85 @@ canvas {
         color: #777;
         font-size: 14px;
         white-space: nowrap;
+    }
+
+    .undrawn {
+        margin: 0;
+        color: #777;
+        text-align: left;
+    }
+
+    /* Who's playing in the next round, a column of ticks per team */
+    .picker {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 6px;
+        background-color: #F2F2F2;
+    }
+
+    .pick-teams {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+
+        fieldset {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+            margin: 0;
+            padding: 0;
+            border: none;
+            text-align: left;
+        }
+
+        legend {
+            margin-bottom: 4px;
+            font-weight: bold;
+        }
+
+        label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 32px;
+            cursor: pointer;
+
+            span {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+        }
+
+        input {
+            width: 20px;
+            height: 20px;
+            margin: 0;
+            flex: none;
+        }
+    }
+
+    .shape {
+        margin: 0;
+        color: #555;
+    }
+
+    .draw {
+        align-self: center;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+
+        &:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
     }
 
     .actions {
