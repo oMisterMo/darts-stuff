@@ -287,7 +287,6 @@ canvas {
     #team-fields {
         display: grid;
         grid-template-columns: 1fr auto 1fr;
-        align-items: center;
         gap: 12px;
         margin-bottom: 16px;
 
@@ -444,7 +443,7 @@ canvas {
         text-align: left;
     }
 
-    /* Who's playing in the next round, a column of ticks per team */
+    /* Who's playing in the next round: zones per team to drag players between */
     .picker {
         display: flex;
         flex-direction: column;
@@ -454,46 +453,103 @@ canvas {
         background-color: #F2F2F2;
     }
 
+    /* Home and away side by side, a row per zone */
     .pick-teams {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 6px 12px;
+        text-align: left;
 
-        fieldset {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            min-width: 0;
+        h3 {
             margin: 0;
-            padding: 0;
-            border: none;
-            text-align: left;
+            font-size: 16px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    }
+
+    .zone {
+        padding: 6px;
+        border: 2px solid transparent;
+        border-radius: 6px;
+        background-color: white;
+
+        &.side {
+            background-color: #E8F3E9;
         }
 
-        legend {
-            margin-bottom: 4px;
-            font-weight: bold;
-        }
+        &.out {
+            background-color: #E4E4E4;
 
-        label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            min-height: 32px;
-            cursor: pointer;
-
-            span {
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
+            .chip {
+                color: #777;
             }
         }
 
-        input {
-            width: 20px;
-            height: 20px;
-            margin: 0;
-            flex: none;
+        &.over {
+            border-color: #4CAF50;
+        }
+
+        &.full {
+            border-color: #C8102E;
+        }
+    }
+
+    .zone-name {
+        display: block;
+        width: 100%;
+        margin-bottom: 4px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: #555;
+        font-size: 13px;
+        font-weight: bold;
+        text-align: left;
+
+        /* Enabled while a picked-up player can be put here */
+        &:not(:disabled) {
+            color: #00873E;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+    }
+
+    .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        min-height: 32px;
+    }
+
+    .empty {
+        align-self: center;
+        color: #999;
+        font-size: 13px;
+    }
+
+    .chip {
+        max-width: 100%;
+        padding: 6px 10px;
+        border: 1px solid #CCC;
+        border-radius: 16px;
+        background-color: white;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: grab;
+        /* The pointer drags the chip rather than scrolling the page */
+        touch-action: none;
+        user-select: none;
+
+        &.selected {
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 2px #4CAF50;
+        }
+
+        &.dragging {
+            opacity: 0.3;
         }
     }
 
@@ -1113,4 +1169,21 @@ canvas {
         cursor: default;
         pointer-events: none;
     }
+}
+
+/* A player chip following the pointer while it's dragged */
+.chip.ghost {
+    position: fixed;
+    z-index: 10;
+    box-sizing: border-box;
+    padding: 6px 10px;
+    border: 1px solid #4CAF50;
+    border-radius: 16px;
+    background-color: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    font: inherit;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
 }

@@ -1123,15 +1123,15 @@ document.getElementById('wins-reset').addEventListener('click', () => {
 
 // ---- Team game ----
 
-// Two teams of 8, or more with reserves. Before each round you tick who's
-// playing (8 at most), then the sides
-// are drawn at random: 2 fours at 701, 4 pairs at 601 and 8 singles at 501,
+// Two teams of 8, or more with reserves. Before each round you drag who's
+// playing (8 at most) into place, picking partners if you like, then the sides
+// are drawn at random: 2 fours at 801, 4 pairs at 601 and 8 singles at 501,
 // every match one leg, double out. A team that's short plays 4v3 or 2v1,
 // and gives away a singles match. A side's players take turns to throw.
 // Each match won is a point.
 const TEAM_SIZE = 8;
 const TEAM_ROUNDS = [
-    { name: 'Fours', start: 701, size: 4 },
+    { name: 'Fours', start: 801, size: 4 },
     { name: 'Pairs', start: 601, size: 2 },
     { name: 'Singles', start: 501, size: 1 }
 ];
@@ -1147,12 +1147,14 @@ const fixturesScore = document.getElementById('fixtures-score');
 const fixturesList = document.getElementById('fixtures-list');
 const fixturesNext = document.getElementById('fixtures-next');
 
-// { teams: [{ name, players }], out, fixtures: [{ round, start, sides, winner, left, walkover }] },
+// { teams: [{ name, players }], out, groups, fixtures: [{ round, start, sides, winner, left, walkover }] },
 // or null. Fixtures are added a round at a time as each is drawn. `out`
 // holds, for each team, the indexes of the players not playing; it carries
-// over to the next round. `winner` is 0 or 1 once played, `left` the
+// over to the next round. `groups` holds, for each team, a side letter by
+// player index ('' or missing for any side), to put players together in
+// the next round; it's cleared once that round is drawn. `winner` is 0 or 1 once played, `left` the
 // loser's score left (null for a walkover).
-const savedTeamGame = loadSaved(TEAM_GAME_STORAGE_KEY, { out: [[], []] });
+const savedTeamGame = loadSaved(TEAM_GAME_STORAGE_KEY, { out: [[], []], groups: [[], []] });
 let teamGame = Array.isArray(savedTeamGame.fixtures) ? savedTeamGame : null;
 
 function saveTeamGame() {
@@ -1255,7 +1257,7 @@ function sideSizes(round, count) {
     return Array.from({ length: matches }, (_, i) => base + (i < count % matches ? 1 : 0));
 }
 
-// The players ticked as playing for each team
+// The players playing in the next round for each team
 function playing(team) {
     return teamGame.teams[team].players.filter((_, i) => !teamGame.out[team].includes(i));
 }
@@ -1264,17 +1266,47 @@ function roundDrawn(roundIndex) {
     return teamGame.fixtures.some(f => f.round === roundIndex);
 }
 
-// A round's matches, with each team's players shuffled and split into
-// sides. Short sides line up against each other, since the bigger sides
-// come first for both teams. A side with no one loses by a walkover, and
-// a match neither team can field isn't played.
+// The letters a team can put players together under in a round, one per side
+function sideLetters(round) {
+    return Array.from({ length: TEAM_SIZE / round.size }, (_, i) => String.fromCharCode(65 + i));
+}
+
+// A team's sides for a round, biggest first: players put together under a
+// letter share a side, the biggest group taking the biggest side, and the
+// rest are shuffled into the places left. { sides } or { error }.
+function teamSides(round, team) {
+    const names = teamGame.teams[team].players;
+    const indexes = names.map((_, i) => i).filter(i => !teamGame.out[team].includes(i));
+    const slots = sideSizes(round, indexes.length).map(size => ({ size, names: [] }));
+    const groups = new Map();
+    indexes.forEach(i => {
+        const letter = round.size > 1 ? teamGame.groups[team]?.[i] : '';
+        if (letter) groups.set(letter, [...(groups.get(letter) ?? []), i]);
+    });
+    const fixed = [...groups].sort(([, a], [, b]) => b.length - a.length);
+    for (const [i, [letter, group]] of fixed.entries()) {
+        // Sides and groups are both biggest first, so if this doesn't fit, nothing does
+        if (group.length > slots[i].size) {
+            return { error: `${teamGame.teams[team].name} has too many in ${letter}, ${slots[i].size} at most` };
+        }
+        slots[i].names = group.map(index => names[index]);
+    }
+    const grouped = fixed.flatMap(([, group]) => group);
+    const rest = shuffled(indexes.filter(i => !grouped.includes(i)).map(i => names[i]));
+    slots.forEach(slot => slot.names.push(...rest.splice(0, slot.size - slot.names.length)));
+    return { sides: slots.map(slot => slot.names) };
+}
+
+// A round's matches. Each team's sides are shuffled, so who they play is
+// random, but kept biggest first, so short sides still meet each other.
+// A side with no one loses by a walkover, and a match neither team can
+// field isn't played.
 function drawRound(roundIndex) {
     const round = TEAM_ROUNDS[roundIndex];
-    const players = [0, 1].map(team => shuffled(playing(team)));
-    const sides = players.map(list => {
-        let taken = 0;
-        return sideSizes(round, list.length).map(size => list.slice(taken, taken += size));
-    });
+    const results = [0, 1].map(team => teamSides(round, team));
+    if (results.some(result => result.error)) return;
+    const sides = results.map(({ sides }) => shuffled(sides).sort((a, b) => b.length - a.length));
+    teamGame.groups = [[], []];
     sides[0].forEach((home, i) => {
         const away = sides[1][i];
         if (!home.length && !away.length) return;
@@ -1318,9 +1350,9 @@ teamForm.addEventListener('submit', event => {
         players: players.map(input => input.value.trim()).filter(Boolean)
     }));
     save(TEAMS_STORAGE_KEY, { teams });
-    // The first 8 are ticked as playing to start with, reserves aren't
+    // The first 8 are playing to start with, reserves aren't
     const reserves = team => team.players.map((_, i) => i).filter(i => i >= TEAM_SIZE);
-    teamGame = { teams, out: teams.map(reserves), fixtures: [] };
+    teamGame = { teams, out: teams.map(reserves), groups: [[], []], fixtures: [] };
     saveTeamGame();
     showFixtures();
 });
@@ -1418,8 +1450,10 @@ function showFixtures() {
     window.scrollTo(0, 0);
 }
 
-// Ticks for who's playing in a round from each team, the matches that
-// makes, and the button to draw them. Changes are saved as they're made.
+// Where each team's players are for a round, as zones to drag them
+// between: playing on any side, on a given side (fours and pairs, to put
+// players together), or not playing. Also the matches that makes and the
+// button to draw them. Changes are saved as they're made.
 function roundPicker(roundIndex) {
     const round = TEAM_ROUNDS[roundIndex];
     const picker = element('div', 'picker', '');
@@ -1428,39 +1462,139 @@ function roundPicker(roundIndex) {
     const draw = element('button', 'primary draw', `Draw ${round.name.toLowerCase()}`);
     draw.type = 'button';
     draw.addEventListener('click', () => drawRound(roundIndex));
+    teamGame.groups ??= [[], []];
+    // A player picked up by a click (or Enter), to be put down by clicking a zone
+    let selected = null;
+
+    const zoneOf = (team, i) => teamGame.out[team].includes(i) ? 'out' : (round.size > 1 && teamGame.groups[team][i]) || '';
+
+    const moveTo = (team, i, zone) => {
+        teamGame.out[team] = teamGame.out[team].filter(index => index !== i);
+        if (zone === 'out') teamGame.out[team].push(i);
+        teamGame.groups[team][i] = zone === 'out' ? '' : zone;
+        selected = null;
+        saveTeamGame();
+        render();
+    };
+
+    // A side takes the round's size at most; the other zones take anyone
+    const canTake = (team, zone, i) => zone === '' || zone === 'out' || zoneOf(team, i) === zone
+        || teamGame.teams[team].players.filter((_, j) => zoneOf(team, j) === zone).length < round.size;
 
     const update = () => {
         const counts = [0, 1].map(team => playing(team).length);
-        const [home, away] = counts.map(count => sideSizes(round, count));
+        const [home, away] = counts.map(count => sideSizes(round, Math.min(count, TEAM_SIZE)));
         const matches = home.map((size, i) => [size, away[i]]).filter(([a, b]) => a || b);
         shape.textContent = matches.map(([a, b]) => (a && b ? `${a}v${b}` : `${a}v${b} w/o`)).join(' · ');
         draw.disabled = counts.includes(0) || counts.some(count => count > TEAM_SIZE);
         if (counts.includes(0)) shape.textContent = 'Each team needs someone playing';
         counts.forEach((count, team) => {
-            if (count > TEAM_SIZE) shape.textContent = `${teamGame.teams[team].name} has ${count} ticked, ${TEAM_SIZE} at most`;
+            if (count > TEAM_SIZE) shape.textContent = `${teamGame.teams[team].name} has ${count} playing, ${TEAM_SIZE} at most`;
         });
+        if (draw.disabled) return;
+        const error = [0, 1].map(team => teamSides(round, team).error).find(Boolean);
+        if (error) {
+            shape.textContent = error;
+            draw.disabled = true;
+        }
     };
 
-    teamGame.teams.forEach((team, t) => {
-        const fieldset = element('fieldset', '', '');
-        fieldset.append(element('legend', '', team.name));
-        team.players.forEach((name, i) => {
-            const label = element('label', '', '');
-            const box = document.createElement('input');
-            box.type = 'checkbox';
-            box.checked = !teamGame.out[t].includes(i);
-            box.addEventListener('change', () => {
-                teamGame.out[t] = teamGame.out[t].filter(index => index !== i);
-                if (!box.checked) teamGame.out[t].push(i);
-                saveTeamGame();
-                update();
+    // Drags a player's chip with the pointer (mouse or touch), dropping it
+    // on the zone under the pointer. A press that doesn't move is a click.
+    const dragChip = (chip, team, i, event) => {
+        if (event.button !== 0) return;
+        const start = { x: event.clientX, y: event.clientY };
+        const rect = chip.getBoundingClientRect();
+        let ghost = null;
+        let over = null;
+        chip.setPointerCapture(event.pointerId);
+        const zoneAt = (x, y) => {
+            const zone = document.elementFromPoint(x, y)?.closest('.zone');
+            return zone && Number(zone.dataset.team) === team ? zone : null;
+        };
+        const move = e => {
+            if (!ghost && Math.hypot(e.clientX - start.x, e.clientY - start.y) < 6) return;
+            if (!ghost) {
+                ghost = chip.cloneNode(true);
+                ghost.classList.add('ghost');
+                ghost.style.width = `${rect.width}px`;
+                document.body.append(ghost);
+                chip.classList.add('dragging');
+            }
+            ghost.style.left = `${e.clientX - (start.x - rect.left)}px`;
+            ghost.style.top = `${e.clientY - (start.y - rect.top)}px`;
+            over?.classList.remove('over', 'full');
+            over = zoneAt(e.clientX, e.clientY);
+            over?.classList.add(canTake(team, over.dataset.zone, i) ? 'over' : 'full');
+        };
+        const end = e => {
+            chip.removeEventListener('pointermove', move);
+            chip.removeEventListener('pointerup', end);
+            chip.removeEventListener('pointercancel', end);
+            over?.classList.remove('over', 'full');
+            if (!ghost) {
+                if (e.type === 'pointerup') {
+                    selected = selected?.team === team && selected.i === i ? null : { team, i };
+                    render();
+                }
+                return;
+            }
+            ghost.remove();
+            chip.classList.remove('dragging');
+            const zone = e.type === 'pointerup' ? zoneAt(e.clientX, e.clientY) : null;
+            if (zone && canTake(team, zone.dataset.zone, i)) moveTo(team, i, zone.dataset.zone);
+        };
+        chip.addEventListener('pointermove', move);
+        chip.addEventListener('pointerup', end);
+        chip.addEventListener('pointercancel', end);
+    };
+
+    const render = () => {
+        // The sides first, then the players to place below them
+        const zones = round.size > 1 ? sideLetters(round).map(letter => ({ zone: letter, name: `Side ${letter}` })) : [];
+        zones.push({ zone: '', name: round.size > 1 ? 'Playing, any side' : 'Playing' });
+        zones.push({ zone: 'out', name: 'Not playing' });
+
+        // A row per zone, home on the left and away on the right, so each
+        // row is as tall as the fuller of the two and the sides line up
+        const zoneBox = (team, t, { zone, name }) => {
+            const box = element('div', `zone${zone === 'out' ? ' out' : ''}${zone.length === 1 ? ' side' : ''}`, '');
+            box.dataset.team = t;
+            box.dataset.zone = zone;
+            // The zone's name doubles as the button to put a picked-up player here
+            const heading = element('button', 'zone-name', name);
+            heading.type = 'button';
+            heading.disabled = selected?.team !== t || zoneOf(t, selected.i) === zone || !canTake(t, zone, selected.i);
+            heading.addEventListener('click', () => moveTo(t, selected.i, zone));
+            const chips = element('div', 'chips', '');
+            team.players.forEach((player, i) => {
+                if (zoneOf(t, i) !== zone) return;
+                const chip = element('button', 'chip', player);
+                chip.type = 'button';
+                chip.classList.toggle('selected', selected?.team === t && selected.i === i);
+                chip.setAttribute('aria-pressed', String(chip.classList.contains('selected')));
+                chip.title = 'Drag to move, or click then click where to put them';
+                chip.addEventListener('pointerdown', event => dragChip(chip, t, i, event));
+                // Enter and Space pick up from the keyboard; pointers are handled above
+                chip.addEventListener('click', event => {
+                    if (event.detail !== 0) return;
+                    selected = selected?.team === t && selected.i === i ? null : { team: t, i };
+                    render();
+                });
+                chips.append(chip);
             });
-            label.append(box, element('span', '', name));
-            fieldset.append(label);
-        });
-        teams.append(fieldset);
-    });
-    update();
+            if (!chips.children.length) chips.append(element('span', 'empty', zone.length === 1 ? `Up to ${round.size}` : 'Drag players here'));
+            box.append(heading, chips);
+            return box;
+        };
+        teams.replaceChildren(
+            ...teamGame.teams.map(team => element('h3', '', team.name)),
+            ...zones.flatMap(z => teamGame.teams.map((team, t) => zoneBox(team, t, z)))
+        );
+        update();
+    };
+
+    render();
     picker.append(teams, shape, draw);
     return picker;
 }
