@@ -373,9 +373,43 @@ canvas {
     }
 
     h2 {
+        display: flex;
+        align-items: center;
         margin: 24px 0 8px;
         font-size: 18px;
         text-align: left;
+    }
+
+    /* Opens and closes the next round's picker, in the round's top right */
+    .pick-toggle {
+        display: grid;
+        place-items: center;
+        margin-left: auto;
+        padding: 4px;
+        border: none;
+        border-radius: 6px;
+        background: none;
+        color: inherit;
+        cursor: pointer;
+
+        &:hover {
+            background-color: #E8E8E8;
+        }
+
+        svg {
+            width: 20px;
+            height: 20px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            transition: transform 0.15s;
+        }
+
+        &[aria-expanded="true"] svg {
+            transform: rotate(180deg);
+        }
     }
 
     ol {

@@ -1168,6 +1168,10 @@ const fixturesNext = document.getElementById('fixtures-next');
 const savedTeamGame = loadSaved(TEAM_GAME_STORAGE_KEY, { out: [[], []], groups: [[], []] });
 let teamGame = Array.isArray(savedTeamGame.fixtures) ? savedTeamGame : null;
 
+// Whether the next round's picker is open. Once a round has been drawn it
+// starts closed, and the chevron by the round's name opens it.
+let pickerOpen = false;
+
 function saveTeamGame() {
     save(TEAM_GAME_STORAGE_KEY, teamGame);
 }
@@ -1331,6 +1335,7 @@ function drawRound(roundIndex) {
             walkover
         });
     });
+    pickerOpen = false;
     saveTeamGame();
     showFixtures();
 }
@@ -1392,7 +1397,7 @@ function finishFixture(index, winner, left) {
 
 // The score so far and every match, round by round. Unplayed matches can
 // be played in any order; Play next takes the first.
-function showFixtures() {
+function showFixtures({ keepScroll = false } = {}) {
     const [home, away] = teamGame.teams;
     const score = teamScore();
     const next = teamGame.fixtures.findIndex(f => f.winner === null);
@@ -1410,9 +1415,28 @@ function showFixtures() {
     const toDraw = TEAM_ROUNDS.findIndex((_, r) => !roundDrawn(r));
     fixturesList.replaceChildren(...TEAM_ROUNDS.map((round, roundIndex) => {
         const section = element('section', '', '');
-        section.append(element('h2', '', `${round.name} · ${round.start}`));
+        const heading = element('h2', '', `${round.name} · ${round.start}`);
+        section.append(heading);
         if (roundIndex === toDraw) {
-            section.append(roundPicker(roundIndex));
+            // The first round has nothing else to show, so its picker is
+            // always open; later ones open from the chevron
+            if (roundIndex === 0) {
+                section.append(roundPicker(roundIndex));
+                return section;
+            }
+            const toggle = element('button', 'pick-toggle', '');
+            toggle.type = 'button';
+            toggle.setAttribute('aria-expanded', String(pickerOpen));
+            toggle.setAttribute('aria-label', pickerOpen ? 'Hide team picker' : 'Pick the teams');
+            toggle.title = toggle.getAttribute('aria-label');
+            toggle.append(chevronIcon());
+            toggle.addEventListener('click', () => {
+                pickerOpen = !pickerOpen;
+                showFixtures({ keepScroll: true });
+                fixturesList.querySelector('.pick-toggle')?.focus();
+            });
+            heading.append(toggle);
+            section.append(pickerOpen ? roundPicker(roundIndex) : element('p', 'undrawn', 'Not drawn yet'));
             return section;
         }
         if (!roundDrawn(roundIndex)) {
@@ -1458,7 +1482,18 @@ function showFixtures() {
     fixturesNext.hidden = next === -1;
     fixturesNext.onclick = () => playFixture(next);
     showScreen(fixturesScreen);
-    window.scrollTo(0, 0);
+    if (!keepScroll) window.scrollTo(0, 0);
+}
+
+// A small downward chevron, turned up by CSS while the picker is open
+function chevronIcon() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M6 9l6 6 6-6');
+    svg.append(path);
+    return svg;
 }
 
 // Where each team's players are for a round, as zones to drag them
