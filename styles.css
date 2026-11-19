@@ -93,6 +93,9 @@ main.screen h2 {
     border: none;
     border-radius: 12px;
     padding: 24px;
+    /* The team game dialog focuses itself rather than its first name field,
+       so phones don't pop up the keyboard; no ring round the whole dialog */
+    outline: none;
     /* Tapping the options shouldn't select text or open the
        long-press menu on mobile */
     -webkit-user-select: none;
