@@ -1187,15 +1187,46 @@ function playerInput(side, i) {
     return input;
 }
 
-// Adds or removes player fields at the end of a team, to have `count`
+// A red bin, for the button that removes a player
+function binIcon() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3');
+    svg.append(path);
+    return svg;
+}
+
+// Removes a team's player `i`: the names below move up one, and the last
+// field goes if it's a reserve (the first TEAM_SIZE always stay)
+function removePlayer(team, i) {
+    const { players } = teamInputs[team];
+    players.slice(i).forEach((input, j) => {
+        input.value = players[i + j + 1]?.value ?? '';
+        input.setCustomValidity('');
+    });
+    if (players.length > TEAM_SIZE) setPlayerCount(team, players.length - 1);
+}
+
+// Adds or removes player fields at the end of a team, to have `count`.
+// Each field sits in a row with its bin button.
 function setPlayerCount(team, count) {
     const { side, players, addButton } = teamInputs[team];
     while (players.length < count) {
         const input = playerInput(side, players.length);
-        addButton.before(input);
+        const row = element('div', 'player-row', '');
+        const bin = element('button', 'remove-player', '');
+        bin.type = 'button';
+        bin.title = 'Remove player';
+        bin.setAttribute('aria-label', `Remove ${side.toLowerCase()} player ${players.length + 1}`);
+        bin.append(binIcon());
+        bin.addEventListener('click', () => removePlayer(team, players.indexOf(input)));
+        row.append(input, bin);
+        addButton.before(row);
         players.push(input);
     }
-    while (players.length > count) players.pop().remove();
+    while (players.length > count) players.pop().parentElement.remove();
 }
 
 // A field for each team's name and its players, with a button for more
@@ -1209,16 +1240,34 @@ const teamInputs = ['Home', 'Away'].map((side, team) => {
     name.placeholder = `${side} team`;
     const legend = element('legend', '', '');
     legend.append(name);
-    const players = Array.from({ length: TEAM_SIZE }, (_, i) => playerInput(side, i));
+    const players = [];
     const addButton = element('button', 'add-player', '+ Add player');
     addButton.type = 'button';
     addButton.addEventListener('click', () => {
         setPlayerCount(team, players.length + 1);
         players.at(-1).focus();
     });
-    fieldset.append(legend, ...players, addButton);
+    fieldset.append(legend, addButton);
     teamFields.append(fieldset);
     return { side, name, players, addButton };
+});
+teamInputs.forEach((_, team) => setPlayerCount(team, TEAM_SIZE));
+
+// Enter moves on to the next field (home team, its players, then the away
+// team) rather than submitting the form, which would press the first
+// button, the ✕. The last field just closes the keyboard.
+teamFields.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || event.target.tagName !== 'INPUT') return;
+    event.preventDefault();
+    const inputs = [...teamFields.querySelectorAll('input')];
+    const next = inputs[inputs.indexOf(event.target) + 1];
+    if (next) next.focus();
+    else event.target.blur();
+});
+teamFields.addEventListener('focusin', event => {
+    // Phones label the Enter key Next, or Done on the last field
+    const inputs = [...teamFields.querySelectorAll('input')];
+    if (event.target.tagName === 'INPUT') event.target.enterKeyHint = event.target === inputs.at(-1) ? 'done' : 'next';
 });
 
 // Between the two teams: swaps their names and players, so the away team

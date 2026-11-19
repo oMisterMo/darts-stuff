@@ -304,6 +304,25 @@ canvas {
 /* Team game: the two teams' names and players */
 #team-game {
     width: min(480px, calc(100% - 40px));
+    /* The dialog never scrolls, so Continue and Start stay at the bottom:
+       on a short screen only the team fields scroll */
+    max-height: calc(100dvh - 40px);
+    overflow: hidden;
+
+    &[open] {
+        display: flex;
+        flex-direction: column;
+    }
+
+    form {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+
+        > * {
+            flex: none;
+        }
+    }
 
     p {
         margin-top: 0;
@@ -312,6 +331,10 @@ canvas {
 
     /* Home, the swap button, then away: side by side, or stacked on a phone */
     #team-fields {
+        flex: 0 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
         display: grid;
         grid-template-columns: 1fr auto 1fr;
         gap: 12px;
@@ -368,6 +391,44 @@ canvas {
 
     .team-name {
         font-weight: bold;
+    }
+
+    /* A player's field with its bin button on the right */
+    .player-row {
+        display: flex;
+        gap: 4px;
+
+        /* Fields would otherwise keep their default width and push the bin out */
+        input {
+            min-width: 0;
+        }
+    }
+
+    .remove-player {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 36px;
+        padding: 0;
+        border: none;
+        border-radius: 6px;
+        background: none;
+        color: #C8102E;
+        cursor: pointer;
+
+        &:hover {
+            background-color: #FBE5E8;
+        }
+
+        svg {
+            width: 20px;
+            height: 20px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
     }
 
     .add-player {
