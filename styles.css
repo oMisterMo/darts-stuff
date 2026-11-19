@@ -111,6 +111,30 @@ main.screen h2 {
         margin-top: 0;
     }
 
+    /* The dialog is fixed in place, so this sits in its top right corner,
+       in line with the dialog's 24px padding */
+    .close {
+        position: absolute;
+        top: 16px;
+        right: 24px;
+        width: 40px;
+        height: 40px;
+        border: none;
+        border-radius: 8px;
+        background-color: #E8E8E8;
+        font-size: 20px;
+        cursor: pointer;
+
+        &:hover {
+            background-color: #D6D6D6;
+        }
+
+        /* The heading keeps clear of it */
+        ~ h2 {
+            padding-right: 48px;
+        }
+    }
+
     fieldset {
         margin: 0 0 16px;
         border: 1px solid #DDD;
@@ -846,29 +870,6 @@ canvas {
         }
     }
 
-    /* The dialog is fixed in place, so this sits in its top right corner */
-    .close {
-        position: absolute;
-        top: 16px;
-        /* In line with the dialog's 24px padding, above Undo */
-        right: 24px;
-        width: 40px;
-        height: 40px;
-        border: none;
-        border-radius: 8px;
-        background-color: #E8E8E8;
-        font-size: 20px;
-        cursor: pointer;
-
-        &:hover {
-            background-color: #D6D6D6;
-        }
-    }
-
-    /* Clear of the close button */
-    h2 {
-        padding-right: 48px;
-    }
 
     /* Margins don't collapse in the flex layout, so they're set here
        rather than doubling up */

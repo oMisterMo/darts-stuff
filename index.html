@@ -97,13 +97,12 @@
 
     <dialog id="team-game" class="options" autofocus>
         <form method="dialog">
+            <button value="cancel" class="close" formnovalidate aria-label="Close">✕</button>
             <h2>Game</h2>
             <p>2 fours matches at 801, 4 pairs at 601 and 8 singles
-                at 501, all double out. A team that's short plays 4v3 or 2v1, missing
-                the absent player's visits, and gives away a singles match.</p>
+                at 501, all double out.</p>
             <div id="team-fields"></div>
             <div class="actions">
-                <button value="cancel" formnovalidate>Cancel</button>
                 <button value="continue" id="team-continue" formnovalidate hidden>Continue</button>
                 <button value="ok" class="primary">Start</button>
             </div>
